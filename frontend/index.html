@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Wuthering Waves Toolbox</title>
+    <link href="./styles.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 窗口控制按钮 -->
+        <div class="window-controls">
+            <button class="window-control-button" id="minimize-button">
+                <i class="mdi mdi-minus"></i>
+            </button>
+            <button class="window-control-button" id="maximize-button">
+                <i class="mdi mdi-window-maximize"></i>
+            </button>
+            <button class="window-control-button" id="close-button">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+
+        <!-- 左侧导航栏 -->
+        <div class="sidebar">
+            <div class="nav-background"></div>
+            <div class="nav-item selected" data-page="page1">
+                <div class="icon dragon-mask"></div>
+            </div>
+            <div class="nav-item" data-page="page2">
+                <div class="icon placeholder-icon"></div>
+            </div>
+            <div class="nav-item" data-page="page3">
+                <div class="icon placeholder-icon"></div>
+            </div>
+        </div>
+        
+        <!-- 主内容区域 -->
+        <div class="main-content">
+            <div id="page-content"></div>
+        </div>
+
+        <!-- 调试信息区域 -->
+        <div class="debug-overlay"></div>
+        <div class="debug-container">
+            <div class="debug-latest"></div>
+            <div class="debug-content"></div>
+        </div>
+
+        <!-- 底部按钮组 -->
+        <div class="bottom-buttons">
+            <button class="action-button" id="action2">
+                <i class="mdi mdi-refresh"></i>
+            </button>
+            <button class="action-button" id="action3">
+                <i class="mdi mdi-plus"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 初始化导航背景位置
+        function updateNavBackground(target) {
+            const navBackground = document.querySelector('.nav-background');
+            const rect = target.getBoundingClientRect();
+            const sidebar = document.querySelector('.sidebar');
+            const sidebarRect = sidebar.getBoundingClientRect();
+            
+            // 计算目标元素的中心位置
+            const targetCenter = rect.top;
+            const sidebarTop = sidebarRect.top;
+            
+            // 计算背景元素应该移动的距离
+            const backgroundCenter = targetCenter - sidebarTop - 15;
+            navBackground.style.setProperty('--nav-offset', `${backgroundCenter}px`);
+        }
+
+        // 初始化时设置背景位置
+        const initialSelected = document.querySelector('.nav-item.selected');
+        updateNavBackground(initialSelected);
+
+        // 定义全局的 README 切换函数
+        window.toggleReadme = function(button) {
+            const debugDiv = document.getElementById('debug-info');
+            if (debugDiv) {
+                debugDiv.innerHTML += '全局toggleReadme函数被调用<br>';
+            }
+            
+            const content = button.nextElementSibling;
+            if (content && content.classList.contains('readme-content')) {
+                content.classList.toggle('expanded');
+                button.classList.toggle('expanded');
+                if (debugDiv) {
+                    debugDiv.innerHTML += '成功切换了类名<br>';
+                    debugDiv.innerHTML += '内容区域类名: ' + content.className + '<br>';
+                    debugDiv.innerHTML += '按钮类名: ' + button.className + '<br>';
+                }
+            } else {
+                if (debugDiv) {
+                    debugDiv.innerHTML += '没有找到内容区域<br>';
+                }
+            }
+        };
+
+        // 页面切换逻辑
+        async function loadPage(page) {
+            const pageContent = document.getElementById('page-content');
+            // 1. 先加动画类并清空内容
+            pageContent.classList.add('fade-in');
+            pageContent.innerHTML = '';
+            // 2. 等待动画时间
+            setTimeout(async () => {
+                // 3. 加载内容
+                const res = await fetch(`${page}.html`);
+                const html = await res.text();
+                pageContent.innerHTML = html;
+                // 4. 触发淡入
+                setTimeout(() => {
+                    pageContent.classList.remove('fade-in');
+                }, 10);
+            }, 300); // 300ms与CSS动画时长一致
+        }
+
+        // 使用事件委托处理页面内的点击事件
+        document.getElementById('page-content').addEventListener('click', function(e) {
+            const button = e.target.closest('.readme-collapsible');
+            if (button) {
+                const content = button.nextElementSibling;
+                if (content && content.classList.contains('readme-content')) {
+                    content.classList.toggle('expanded');
+                    button.classList.toggle('expanded');
+                }
+            }
+        });
+
+        // 初始化加载第一页
+        loadPage('page1');
+
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function() {
+                // 移除其他项的选中状态
+                document.querySelectorAll('.nav-item').forEach(nav => {
+                    nav.classList.remove('selected');
+                });
+                
+                // 添加当前项的选中状态
+                this.classList.add('selected');
+                
+                // 更新导航背景位置
+                updateNavBackground(this);
+                
+                // 获取目标页面并加载
+                const targetPage = this.getAttribute('data-page');
+                loadPage(targetPage);
+            });
+        });
+
+        // 调试信息区域控制
+        const debugContainer = document.querySelector('.debug-container');
+        const debugOverlay = document.querySelector('.debug-overlay');
+        let isExpanding = false;
+
+        debugContainer.addEventListener('click', function(e) {
+            if (isExpanding) return;
+            if (this.classList.contains('expanded')) return;
+            
+            isExpanding = true;
+            
+            // 直接展开信息栏
+            this.classList.add('expanded');
+            debugOverlay.classList.add('visible');
+            const latestDebug = this.querySelector('.debug-latest');
+            latestDebug.style.display = 'none';
+            isExpanding = false;
+            
+            e.stopPropagation();
+        });
+
+        // 点击遮罩层或信息栏外部关闭调试信息
+        document.addEventListener('click', function(e) {
+            if (isExpanding) return;
+            if (!debugContainer.classList.contains('expanded')) return;
+            if (debugContainer.contains(e.target)) return;
+            
+            isExpanding = true;
+            
+            debugContainer.classList.remove('expanded');
+            debugOverlay.classList.remove('visible');
+            
+            setTimeout(() => {
+                const latestDebug = debugContainer.querySelector('.debug-latest');
+                // 获取最后一条消息
+                const lastMessage = debugContent.lastElementChild;
+                if (lastMessage) {
+                    latestDebug.textContent = lastMessage.textContent;
+                    latestDebug.style.display = 'block';
+                }
+                isExpanding = false;
+            }, 300);
+        });
+
+        // 窗口控制逻辑
+        const { ipcRenderer } = require('electron');
+
+        document.getElementById('minimize-button').addEventListener('click', () => {
+            ipcRenderer.send('minimize-window');
+        });
+
+        document.getElementById('maximize-button').addEventListener('click', () => {
+            ipcRenderer.send('maximize-window');
+        });
+
+        document.getElementById('close-button').addEventListener('click', () => {
+            ipcRenderer.send('close-window');
+        });
+
+        // 调试信息栏逻辑：每条消息单独显示
+        const debugContent = document.querySelector('.debug-content');
+        const debugLatest = document.querySelector('.debug-latest');
+
+        ipcRenderer.on('debug-message', (event, content, type) => {
+            const now = new Date().toLocaleTimeString();
+            const line = document.createElement('div');
+            line.className = 'debug-line';
+            line.setAttribute('data-type', type || 'INFO');
+            line.textContent = `[${now}] ${content}`;
+            debugContent.appendChild(line);
+            
+            // 只在未展开状态下显示最新消息
+            if (!debugContainer.classList.contains('expanded')) {
+                debugLatest.textContent = `[${now}] ${content}`;
+                debugLatest.style.display = 'block';
+            }
+            
+            debugContent.scrollTop = debugContent.scrollHeight;
+        });
+    </script>
+</body>
+</html> 

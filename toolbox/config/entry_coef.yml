@@ -1,0 +1,12 @@
+Default:
+  coef: 
+    cri_rate: 1.8
+    cri_dmg: 0.9
+    resonance_eff: 0.5
+
+Cartethyia:
+  dmg_source: "hp"
+  coef: 
+    resonance_burst: 0.31
+    normal_dmg: 0.34
+
