@@ -10,10 +10,31 @@ import threading
 
 FILE_FMT    = '[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)s] %(message)s'
 HTTP_FMT    = '[%(levelname)s] [%(filename)s:%(lineno)s] %(message)s'
-CONSOLE_FMT = '\033[92m[%(asctime)s] [%(levelname)s]\033[0m [%(filename)s:%(lineno)s] %(message)s'
+CONSOLE_FMT = '[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)s] %(message)s'
 
 DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
 LOG_DIR = get_project_root() / 'logs'
+
+class ColoredFormatter(logging.Formatter):
+    """A custom log formatter that adds color to log levels."""
+
+    COLORS = {
+        'WARNING': '\033[93m',  # Yellow
+        'INFO': '\033[92m',     # Green
+        'DEBUG': '\033[96m',    # Cyan
+        'CRITICAL': '\033[91m', # Bright Red
+        'ERROR': '\033[91m',    # Red
+    }
+    RESET = '\033[0m'
+
+    def __init__(self, fmt, *args, **kwargs):
+        super().__init__(fmt, *args, **kwargs)
+
+    def format(self, record):
+        record_copy = logging.makeLogRecord(record.__dict__)
+        log_level_color = self.COLORS.get(record_copy.levelname, self.RESET)
+        record_copy.levelname = f"{log_level_color}{record_copy.levelname}{self.RESET}"
+        return super().format(record_copy)
 
 class HTTPLogHandler(logging.Handler):
     def __init__(self, port: int = 2590):
@@ -21,6 +42,7 @@ class HTTPLogHandler(logging.Handler):
         self.port = port
         self.log_queue = queue.Queue()
         self.worker_thread = threading.Thread(target=self._log_worker, daemon=True)
+        self.is_running = True
         self.worker_thread.start()
 
     def _log_worker(self):
@@ -39,14 +61,20 @@ class HTTPLogHandler(logging.Handler):
                                             json={'content': log_entry, 'type': record.levelname}) as response:
                         response.raise_for_status()
                 except Exception as e:
-                    print(f'Failed to send log to http handler: {e}')
+                    print(f'Failed to send log to http handler: {e}. Disabling http handler.')
+                    self.is_running = False
+                    break
                 finally:
                     self.log_queue.task_done()
 
     def emit(self, record: logging.LogRecord):
+        if not self.is_running:
+            return
         self.log_queue.put(record)
 
     def close(self):
+        if not self.is_running:
+            return
         self.log_queue.put(None)
         self.worker_thread.join()
         super().close()
@@ -55,7 +83,7 @@ def setup_console_handler(level: int = logging.INFO) -> logging.StreamHandler:
     """Setup a console handler with a specific log level """
     handler = logging.StreamHandler()
     handler.setLevel(level)
-    formatter = logging.Formatter(CONSOLE_FMT)
+    formatter = ColoredFormatter(CONSOLE_FMT)
     handler.setFormatter(formatter)
     return handler
 
@@ -94,6 +122,7 @@ http_handler = setup_http_handler(port=2590)
 logger.addHandler(http_handler)
 
 logger.setLevel(log_level)
+logger.propagate = False
 logger.info('Logger initialized')
 
 

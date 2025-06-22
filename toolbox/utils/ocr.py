@@ -1,16 +1,25 @@
 from paddleocr import PaddleOCR
 from PIL import Image
-from .generic import get_assets_dir, get_project_root
+from dataclasses import dataclass
 
-import json
-import cv2
+import re
 import numpy as np
 
-engine = PaddleOCR(
-    use_doc_orientation_classify=False, 
-    use_doc_unwarping=False, 
-    use_textline_orientation=False,
-)
+engine = None
+
+def setup_ocr():
+    global engine
+    engine = PaddleOCR(
+        use_doc_orientation_classify=False, 
+        use_doc_unwarping=False, 
+        use_textline_orientation=False,
+    )
+
+@dataclass
+class OCRResult:
+    text: str
+    box: tuple[int, int, int, int]
+    confidence: float
 
 def ocr(image: Image.Image) -> str:
     """
@@ -33,45 +42,29 @@ def ocr(image: Image.Image) -> str:
 
     return predicted.strip()
 
-def compute_descriptor(img: Image.Image) -> np.ndarray:
+def ocr_pattern(image: Image.Image, pattern: str) -> list[OCRResult]:
     """
-    Compute a descriptor for an image.
+    Perform OCR on a PIL Image and return the detected texts with their boxes and confidence scores.
     Args:
-        img (PIL.Image.Image): The image to compute the descriptor for.
+        image (PIL.Image.Image): The image to process.
     Returns:
-        np.ndarray: The descriptor for the image.
+        list[OCRResult]: The detected texts with their boxes and confidence scores.
     """
-    orb = cv2.ORB_create()
-    kp, des = orb.detectAndCompute(np.array(img.convert("RGB")), None)
-    return des
 
-echo_imgs_folder = get_assets_dir() / "imgs"
+    # ensure pattern is a legal regex pattern
+    try:
+        re.compile(pattern)
+    except re.error:
+        raise ValueError(f'Invalid pattern: {pattern}')
 
-with open(echo_imgs_folder / "metadata.json", "r", encoding="utf-8") as f:
-    metadata = json.load(f)
+    result = engine.predict(np.array(image.convert("RGB")))[0]
+    texts, boxes, scores = result['rec_texts'], result['rec_boxes'], result['rec_scores']
 
-img_descriptors = {}
-for entry in metadata:
-    img_path = echo_imgs_folder / entry["file"]
-    img = Image.open(img_path)
-    img_descriptors[entry["name"]] = compute_descriptor(img)
+    results = []
+    for text, box, score in zip(texts, boxes, scores):
+        if re.search(pattern, text):
+            matched_text = re.search(pattern, text).group(0)
+            results.append(OCRResult(matched_text, box, score))
 
-bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    return results
 
-def classify_echo(img: Image.Image) -> str:
-    """
-    Classify an image as an echo.
-    Args:
-        img (PIL.Image.Image): The image to classify.
-    Returns:
-        str: The name of the echo.
-    """
-    descriptor = compute_descriptor(img)
-    max_matches = 0
-    best_match = None
-    for name, descriptor in img_descriptors.items():
-        matches = bf.match(descriptor, img_descriptors[name])
-        if len(matches) > max_matches:
-            max_matches = len(matches)
-            best_match = name
-    return best_match

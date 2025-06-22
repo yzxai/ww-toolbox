@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 from copy import deepcopy
 from toolbox.utils.ocr import ocr
+from toolbox.utils.logger import logger
 
 stat_file = Path(__file__).parent / "entry_stats.yml"
 coef_file = Path(__file__).parent / "entry_coef.yml"
@@ -97,31 +98,106 @@ class EchoProfile:
             setattr(self, key, value)
         return self
     
+    def __hash__(self):
+        return hash(tuple(self.__dict__.items()))
+    
+    def validate(self) -> bool:
+        if not 0 <= self.level <= 25:
+            logger.warning(f"Validation failed due to invalid level: {self.level}")
+            return False
+        
+        # check the number of non-zero entries
+        num_non_zero = sum(1 for key, value in self.__dict__.items() if value != 0 and key != "level")
+        if num_non_zero != self.level // 5:
+            logger.warning(f"Validation failed due to invalid number of non-zero entries: {num_non_zero} != {self.level // 5}")
+            return False
+        
+        # ensure all non-zero entries are valid
+        for key, value in self.__dict__.items():
+            if key == "level" or value == 0:
+                continue 
+
+            matched = False
+            for entry in stat_data[key]["distribution"]:
+                if entry["value"] == value:
+                    matched = True 
+                    break 
+            
+            if not matched:
+                logger.warning(f"Validation failed due to invalid entry {key}: {value}")
+                return False
+            
+        return True
+    
+    def _extract_number(self, line: str) -> float | None:
+        numbers = re.findall(r"\d+\.?\d?", line)
+        if numbers:
+            return float(numbers[0])
+        return None
+    
+    def _extract_entry(self, line: str) -> str | None:
+        longest_entry_name, longest_entry_key = "", ""
+        for key, entry in stat_data.items():
+            if entry["name"] in line:
+                if ("%" in line) != (entry["type"] == "percentage"):
+                    continue
+                
+                if len(entry["name"]) > len(longest_entry_name):
+                    longest_entry_name = entry["name"]
+                    longest_entry_key = key
+        
+        if longest_entry_name:
+            return longest_entry_key
+        return None
+    
     def from_image(self, image: Image.Image) -> "EchoProfile":
         text = ocr(image)
 
-        def extract_number(line: str) -> float | None:
-            numbers = re.findall(r"\d+\.?\d+", line)
-            if numbers:
-                return float(numbers[0])
-            return None
+        
+        
+        lines_to_skip = 0
         
         for line in text.split("\n"):
             line = line.strip()
             if "+" in line:
-                level = extract_number(line)
-                if level:
+                level = self._extract_number(line)
+                if level is not None:
                     self.level = round(level)
+                    lines_to_skip = 2 
+                continue
 
-            for key, entry in stat_data.items():
-                if entry["name"] in line:
-                    if (entry["type"] == "percentage") != ("%" in line):
-                        continue
-                    number = extract_number(line)
-                    if number:
-                        setattr(self, key, number)
+            if lines_to_skip > 0:
+                lines_to_skip -= 1
+                continue
+
+            # find longest entry name appear in the line 
+            longest_entry_key = self._extract_entry(line)
+
+            if longest_entry_key:
+                number = self._extract_number(line)
+                if number:
+                    setattr(self, longest_entry_key, number)
 
         return self
+    
+    def upgrade(self, new_entry: str):
+        longest_entry_key = self._extract_entry(new_entry)
+
+        if longest_entry_key is None:
+            logger.warning(f"Invalid entry: {new_entry}")
+            return None
+        
+        tmp_profile = deepcopy(self)
+        tmp_profile.level = (tmp_profile.level + 5) // 5 * 5
+        
+        if longest_entry_key:
+            number = self._extract_number(new_entry)
+            if number:
+                setattr(tmp_profile, longest_entry_key, number)
+        
+        if tmp_profile.validate():
+            return tmp_profile
+        return None
     
     def get_score(self, coef: EntryCoef) -> float:
         total_score = 0
