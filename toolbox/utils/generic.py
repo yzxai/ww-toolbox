@@ -10,8 +10,11 @@ def get_project_root() -> Path:
 def get_assets_dir() -> Path:
     return get_project_root() / "assets"
 
+def get_config_dir() -> Path:
+    return get_project_root() / "assets" / "config"
+
 def get_timestamp() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 def is_admin() -> bool:
     return ctypes.windll.shell32.IsUserAnAdmin() != 0

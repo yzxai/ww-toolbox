@@ -2,3 +2,7 @@ build
 node_modules
 *.pyd
 logs
+*.egg-info
+__pycache__
+.vscode
+.DS_Store

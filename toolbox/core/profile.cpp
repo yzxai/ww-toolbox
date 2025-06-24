@@ -6,6 +6,7 @@
 #include <cmath>
 #include <tuple>
 #include <map>
+#include <list>
 
 namespace py = pybind11;
 
@@ -54,6 +55,31 @@ namespace std {
         }
     };
 }
+
+struct DiscardScheduler {
+    std::vector<double> thresholds;
+
+    DiscardScheduler() : thresholds(4, 0.0) {}
+    DiscardScheduler(const std::vector<double>& t) : thresholds(t) {
+        if (t.size() != 4) throw std::runtime_error("DiscardScheduler needs 4 thresholds");
+    }
+
+    bool operator==(const DiscardScheduler& other) const {
+        if (thresholds.size() != other.thresholds.size()) return false;
+        for (size_t i = 0; i < thresholds.size(); ++i) {
+            if (std::abs(thresholds[i] - other.thresholds[i]) > 1e-6) return false;
+        }
+        return true;
+    }
+
+    double get_threshold_for_level(int level) const {
+        if (level >= 5 && level <= 9) return thresholds[0];
+        if (level >= 10 && level <= 14) return thresholds[1];
+        if (level >= 15 && level <= 19) return thresholds[2];
+        if (level >= 20 && level <= 24) return thresholds[3];
+        return 0.0;
+    }
+};
 
 double get_score(const EchoProfile& profile, const EntryCoef& coef) {
     double total = 0.0;
@@ -124,12 +150,12 @@ double prob_above_score(
 struct CacheKey {
     EntryCoef coef;
     double score_thres;
-    double discard_thres;
+    DiscardScheduler scheduler;
 
     bool operator==(const CacheKey& other) const {
         return coef == other.coef && 
                 std::abs(score_thres - other.score_thres) < 1e-6 &&
-                std::abs(discard_thres - other.discard_thres) < 1e-6;
+                scheduler == other.scheduler;
     }
 };
 
@@ -141,25 +167,64 @@ struct CacheKeyHash {
                     std::hash<int>()(int(std::round(kv.second * 10)));
         }
         h ^= std::hash<int>()(int(std::round(key.score_thres * 10)));
-        h ^= std::hash<int>()(int(std::round(key.discard_thres * 10)));
+        for (const auto& threshold : key.scheduler.thresholds) {
+            h ^= std::hash<int>()(int(std::round(threshold * 1000)));
+        }
         return h;
     }
+};
+
+template<typename Key, typename Value, typename Hasher>
+class LRUCache {
+public:
+    LRUCache(size_t max_size) : max_size_(max_size) {}
+
+    Value& operator[](const Key& key) {
+        auto it = map_.find(key);
+
+        if (it != map_.end()) {
+            // Key found, move to front (most recently used)
+            list_.splice(list_.begin(), list_, it->second.second);
+            return it->second.first;
+        }
+
+        // Key not found, must insert
+        if (map_.size() >= max_size_ && !list_.empty()) {
+            // Cache is full, evict least recently used
+            Key lru_key = list_.back();
+            list_.pop_back();
+            map_.erase(lru_key);
+        }
+
+        // Insert new element
+        list_.push_front(key);
+        auto& entry = map_[key];
+        entry.second = list_.begin();
+        return entry.first;
+    }
+
+private:
+    using ListIterator = typename std::list<Key>::iterator;
+    using CacheEntry = std::pair<Value, ListIterator>;
+    size_t max_size_;
+    std::list<Key> list_;
+    std::unordered_map<Key, CacheEntry, Hasher> map_;
 };
 
 double get_expected_wasted_exp(
     const EchoProfile& profile,
     const EntryCoef& coef,
     double score_thres,
-    double discard_thres,
+    const DiscardScheduler& scheduler,
     const py::dict& stat_data
 ) {
     static std::vector<int> exp = {0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
         24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600};
 
-    static std::unordered_map<CacheKey, std::unordered_map<EchoProfile, double>, CacheKeyHash> cache;
-    static CacheKey current_key{coef, score_thres, discard_thres};
+    static LRUCache<CacheKey, std::unordered_map<EchoProfile, double>, CacheKeyHash> waste_exp_cache(5);
+    CacheKey current_key{coef, score_thres, scheduler};
 
-    auto& stored_expectations = cache[current_key];
+    auto& stored_expectations = waste_exp_cache[current_key];
 
     std::function<double(const EchoProfile&)> solve = [&](const EchoProfile& p) -> double {
         std::unordered_map<EchoProfile, double>::const_iterator it = stored_expectations.find(p);
@@ -168,10 +233,11 @@ double get_expected_wasted_exp(
         double score = get_score(p, coef);
         if (score >= score_thres) return 0;
 
-        if (p.level == 25) return exp[25] - exp[profile.level];
+        if (p.level == 25) return exp[25];
 
         double prob = prob_above_score(p, coef, score_thres, stat_data);
-        if (prob < discard_thres) return exp[p.level] - exp[profile.level];
+        double discard_thres = scheduler.get_threshold_for_level(p.level);
+        if (prob < discard_thres) return exp[p.level];
 
         double expected_wasted_exp = 0.0;
         std::vector<std::string> avail_keys;
@@ -216,13 +282,13 @@ double prob_above_threshold_with_discard(
     const EchoProfile& profile,
     const EntryCoef& coef,
     double score_thres,
-    double discard_thres,
+    const DiscardScheduler& scheduler,
     const py::dict& stat_data
 ) {
-    static std::unordered_map<CacheKey, std::unordered_map<EchoProfile, double>, CacheKeyHash> cache;
-    static CacheKey current_key{coef, score_thres, discard_thres};
+    static std::unordered_map<CacheKey, std::unordered_map<EchoProfile, double>, CacheKeyHash> prob_cache;
+    CacheKey current_key{coef, score_thres, scheduler};
 
-    auto& stored_expectations = cache[current_key];
+    auto& stored_expectations = prob_cache[current_key];
 
     std::function<double(const EchoProfile&)> solve = [&](const EchoProfile& p) -> double {
         std::unordered_map<EchoProfile, double>::const_iterator it = stored_expectations.find(p);
@@ -234,6 +300,7 @@ double prob_above_threshold_with_discard(
         if (p.level == 25) return 0;
 
         double prob = prob_above_score(p, coef, score_thres, stat_data);
+        double discard_thres = scheduler.get_threshold_for_level(p.level);
         if (prob < discard_thres) return 0;
 
         double expected_num_tries = 0.0;
@@ -286,6 +353,11 @@ PYBIND11_MODULE(profile_cpp, m) {
         .def(py::init<int, const std::unordered_map<std::string, double>&>())
         .def_readwrite("level", &EchoProfile::level)
         .def_readwrite("values", &EchoProfile::values);
+
+    py::class_<DiscardScheduler>(m, "DiscardScheduler")
+        .def(py::init<>())
+        .def(py::init<const std::vector<double>&>())
+        .def_readwrite("thresholds", &DiscardScheduler::thresholds);
 
     m.def("prob_above_score", &prob_above_score, "C++ version of prob_above_score");
     m.def("get_expected_wasted_exp", &get_expected_wasted_exp, "C++ version of get_expected_wasted_exp");

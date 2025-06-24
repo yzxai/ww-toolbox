@@ -1,4 +1,5 @@
 import re
+import json
 import yaml
 import profile_cpp
 
@@ -6,17 +7,33 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from PIL import Image
 from copy import deepcopy
+from toolbox.utils.generic import get_config_dir, get_assets_dir
 from toolbox.utils.ocr import ocr
 from toolbox.utils.logger import logger
 
-stat_file = Path(__file__).parent / "entry_stats.yml"
-coef_file = Path(__file__).parent / "entry_coef.yml"
+stat_file = get_config_dir() / "entry_stats.yml"
+coef_file = get_config_dir() / "entry_coef.yml"
+echo_file = get_assets_dir() / "echo.json"
 
 with open(stat_file, "r", encoding="utf-8") as f:
     stat_data = yaml.safe_load(f)
 
 with open(coef_file, "r", encoding="utf-8") as f:
     coef_data = yaml.safe_load(f)
+
+with open(echo_file, "r", encoding="utf-8") as f:
+    echo_data = json.load(f)
+
+@dataclass
+class DiscardScheduler:
+    level_5_9: float = field(default=0.0)
+    level_10_14: float = field(default=0.0)
+    level_15_19: float = field(default=0.0)
+    level_20_24: float = field(default=0.0)
+
+    def to_cpp(self):
+        thresholds = [self.level_5_9, self.level_10_14, self.level_15_19, self.level_20_24]
+        return profile_cpp.DiscardScheduler(thresholds)
 
 @dataclass 
 class EntryCoef:
@@ -79,6 +96,7 @@ class EntryCoef:
 @dataclass
 class EchoProfile:
     level: int = field(default=0)
+    name: str = field(default="")
     atk_rate: float = field(default=0.0)
     atk_num: int = field(default=0)
     def_rate: float = field(default=0.0)
@@ -99,22 +117,26 @@ class EchoProfile:
         return self
     
     def __hash__(self):
-        return hash(tuple(self.__dict__.items()))
+        return hash(tuple([(k, v) for k, v in self.__dict__.items() if k not in ["name"]]))
     
     def validate(self) -> bool:
         if not 0 <= self.level <= 25:
             logger.warning(f"Validation failed due to invalid level: {self.level}")
             return False
         
+        if self.name not in echo_data.keys():
+            logger.warning(f"Validation failed due to invalid name: {self.name}")
+            return False
+        
         # check the number of non-zero entries
-        num_non_zero = sum(1 for key, value in self.__dict__.items() if value != 0 and key != "level")
+        num_non_zero = sum(1 for key, value in self.__dict__.items() if value != 0 and key not in ["level", "name"])
         if num_non_zero != self.level // 5:
             logger.warning(f"Validation failed due to invalid number of non-zero entries: {num_non_zero} != {self.level // 5}")
             return False
         
         # ensure all non-zero entries are valid
         for key, value in self.__dict__.items():
-            if key == "level" or value == 0:
+            if key in ["level", "name"] or value == 0:
                 continue 
 
             matched = False
@@ -152,13 +174,31 @@ class EchoProfile:
     
     def from_image(self, image: Image.Image) -> "EchoProfile":
         text = ocr(image)
-
-        
-        
         lines_to_skip = 0
         
         for line in text.split("\n"):
             line = line.strip()
+
+            logger.debug(f"line: {line}")
+
+            if self.name == "" and self.level == 0:
+                matched_longest_name = ""
+                for name in echo_data.keys():
+                    # create a regex pattern for the name to ignore rare characters 
+                    # and match the line with the pattern
+                    rare_chars = ['魇', '·', '螯', '獠', '鬃', '翎']
+
+                    substituted_name = name
+
+                    for rare_char in rare_chars:
+                        substituted_name = substituted_name.replace(rare_char, ".?")
+                    pattern = re.compile(substituted_name)
+
+                    if re.search(pattern, line):
+                        if len(name) > len(matched_longest_name):
+                            matched_longest_name = name
+                            self.name = name
+            
             if "+" in line:
                 level = self._extract_number(line)
                 if level is not None:
@@ -180,7 +220,7 @@ class EchoProfile:
 
         return self
     
-    def upgrade(self, new_entry: str):
+    def upgrade(self, level: int, new_entry: str):
         longest_entry_key = self._extract_entry(new_entry)
 
         if longest_entry_key is None:
@@ -188,7 +228,7 @@ class EchoProfile:
             return None
         
         tmp_profile = deepcopy(self)
-        tmp_profile.level = (tmp_profile.level + 5) // 5 * 5
+        tmp_profile.level = level
         
         if longest_entry_key:
             number = self._extract_number(new_entry)
@@ -213,12 +253,12 @@ class EchoProfile:
 
         for key in coef.__dict__.keys():
             curr_value = getattr(self, key)
-            if curr_value != 0:
+            if curr_value == 0:
                 expected_value = 0
                 for entry in stat_data[key]["distribution"]:
                     expected_value += entry["value"] * entry["probability"]
                 possible_entries.append(key)
-                tmp_profile.setattr(key, expected_value)
+                setattr(tmp_profile, key, expected_value)
         
         for key in possible_entries:
             setattr(tmp_profile, key, getattr(tmp_profile, key) * remain_slots / len(possible_entries))
@@ -226,16 +266,16 @@ class EchoProfile:
         return tmp_profile.get_score(coef)
     
     def to_cpp(self):
-        return profile_cpp.EchoProfile(self.level, {k: float(v) for k, v in self.__dict__.items() if k != "level"})
+        return profile_cpp.EchoProfile(self.level, {k: float(v) for k, v in self.__dict__.items() if k != "level" and k != "name"})
 
     def prob_above_score(self, coef: 'EntryCoef', threshold: float) -> float:
         return profile_cpp.prob_above_score(self.to_cpp(), coef.to_cpp(), threshold, stat_data)
 
-    def get_expected_wasted_exp(self, coef: 'EntryCoef', score_thres: float, discard_thres: float) -> float:
-        return profile_cpp.get_expected_wasted_exp(self.to_cpp(), coef.to_cpp(), score_thres, discard_thres, stat_data)
+    def get_expected_wasted_exp(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> float:
+        return profile_cpp.get_expected_wasted_exp(self.to_cpp(), coef.to_cpp(), score_thres, scheduler.to_cpp(), stat_data)
     
-    def prob_above_threshold_with_discard(self, coef: 'EntryCoef', score_thres: float, discard_thres: float) -> float:
-        return profile_cpp.prob_above_threshold_with_discard(self.to_cpp(), coef.to_cpp(), score_thres, discard_thres, stat_data)
+    def prob_above_threshold_with_discard(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> float:
+        return profile_cpp.prob_above_threshold_with_discard(self.to_cpp(), coef.to_cpp(), score_thres, scheduler.to_cpp(), stat_data)
     
 
 def test():
@@ -262,10 +302,10 @@ def test():
     init_profile = EchoProfile()
     print(f"probability to get at least {threshold_score} score: {init_profile.prob_above_score(coef, threshold_score)}")
 
-    discard_thres = 0.1119
-    expected_wasted_exp = init_profile.get_expected_wasted_exp(coef, threshold_score, discard_thres)
+    scheduler = DiscardScheduler(level_5_9=0.1119, level_10_14=0.1119, level_15_19=0.1119, level_20_24=0.1119)
+    expected_wasted_exp = init_profile.get_expected_wasted_exp(coef, threshold_score, scheduler)
     print(f"expected wasted exp: {expected_wasted_exp}")
-    prob_above_threshold = init_profile.prob_above_threshold_with_discard(coef, threshold_score, discard_thres)
+    prob_above_threshold = init_profile.prob_above_threshold_with_discard(coef, threshold_score, scheduler)
     print(f"probability to get at least {threshold_score} score with discard: {prob_above_threshold}")
 
     print(f"expected total wasted exp (with discard): {expected_wasted_exp / prob_above_threshold}")

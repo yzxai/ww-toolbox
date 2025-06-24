@@ -56,9 +56,8 @@ class EchoTask(BaseTask):
         return Page.MAIN
 
     def to_page(self, target: Page):
+        time.sleep(0.5)
         current_page = self.current_page()
-
-        print(f"Current page: {current_page}")
 
         # bfs to find the shortest path
         def bfs(start: Page) -> list[Page]:

@@ -48,16 +48,17 @@
         </div>
 
         <!-- 底部按钮组 -->
-        <div class="bottom-buttons">
+        <!-- <div class="bottom-buttons">
             <button class="action-button" id="action2">
                 <i class="mdi mdi-refresh"></i>
             </button>
             <button class="action-button" id="action3">
                 <i class="mdi mdi-plus"></i>
             </button>
-        </div>
+        </div> -->
     </div>
-
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="page1.js"></script>
     <script>
         // 初始化导航背景位置
         function updateNavBackground(target) {
@@ -102,6 +103,13 @@
             }
         };
 
+        function abbreviateMessage(message, maxLength = 100) {
+            if (message.length > maxLength) {
+                return message.substring(0, maxLength) + '...';
+            }
+            return message;
+        }
+
         // 页面切换逻辑
         async function loadPage(page) {
             const pageContent = document.getElementById('page-content');
@@ -117,6 +125,9 @@
                 // 4. 触发淡入
                 setTimeout(() => {
                     pageContent.classList.remove('fade-in');
+                    if (page === 'page1') {
+                        initializePage1();
+                    }
                 }, 10);
             }, 300); // 300ms与CSS动画时长一致
         }
@@ -192,7 +203,7 @@
                 // 获取最后一条消息
                 const lastMessage = debugContent.lastElementChild;
                 if (lastMessage) {
-                    latestDebug.textContent = lastMessage.textContent;
+                    latestDebug.textContent = abbreviateMessage(lastMessage.textContent);
                     latestDebug.style.display = 'block';
                 }
                 isExpanding = false;
@@ -223,12 +234,17 @@
             const line = document.createElement('div');
             line.className = 'debug-line';
             line.setAttribute('data-type', type || 'INFO');
-            line.textContent = `[${now}] ${content}`;
+            const fullMessage = `[${now}] ${content}`;
+            line.textContent = fullMessage;
             debugContent.appendChild(line);
+
+            while (debugContent.children.length > 200) {
+                debugContent.removeChild(debugContent.firstChild);
+            }
             
             // 只在未展开状态下显示最新消息
             if (!debugContainer.classList.contains('expanded')) {
-                debugLatest.textContent = `[${now}] ${content}`;
+                debugLatest.textContent = abbreviateMessage(fullMessage);
                 debugLatest.style.display = 'block';
             }
             

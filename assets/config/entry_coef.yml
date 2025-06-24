@@ -5,8 +5,10 @@ Default:
     resonance_eff: 0.5
 
 Cartethyia:
+  name: "卡提希娅"
   dmg_source: "hp"
   coef: 
-    resonance_burst: 0.31
-    normal_dmg: 0.34
+    resonance_burst: 0.19
+    normal_dmg: 0.66
+    resonance_eff: 0.5
 

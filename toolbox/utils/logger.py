@@ -37,35 +37,52 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record_copy)
 
 class HTTPLogHandler(logging.Handler):
-    def __init__(self, port: int = 2590):
+    def __init__(self, port: int = 2590, max_retries: int = 3):
         super().__init__()
         self.port = port
         self.log_queue = queue.Queue()
         self.worker_thread = threading.Thread(target=self._log_worker, daemon=True)
         self.is_running = True
+        self.max_retries = max_retries
         self.worker_thread.start()
 
     def _log_worker(self):
         asyncio.run(self._async_log_sender())
 
     async def _async_log_sender(self):
-        async with aiohttp.ClientSession() as session:
-            while True:
-                record = self.log_queue.get()
-                if record is None:  # Sentinel to stop the worker
-                    break
+        session = aiohttp.ClientSession()
+        while self.is_running:
+            record = self.log_queue.get()
+            if record is None:  # Sentinel to stop the worker
+                break
 
-                log_entry = self.format(record)
+            log_entry = self.format(record)
+
+            succeeded = False
+            for attempt in range(self.max_retries):
                 try:
+                    if session.closed:
+                        session = aiohttp.ClientSession()
+
                     async with session.post(f'http://localhost:{self.port}',
                                             json={'content': log_entry, 'type': record.levelname}) as response:
                         response.raise_for_status()
+                    
+                    succeeded = True
+                    break  # from the retry loop
                 except Exception as e:
-                    print(f'Failed to send log to http handler: {e}. Disabling http handler.')
-                    self.is_running = False
-                    break
-                finally:
-                    self.log_queue.task_done()
+                    print(f'Failed to send log to http handler (attempt {attempt + 1}/{self.max_retries}): {e}.')
+                    if not session.closed:
+                        await session.close()
+
+            if not succeeded:
+                print(f'Disabling http handler after {self.max_retries} failed attempts.')
+                self.is_running = False
+            
+            self.log_queue.task_done()
+
+        if not session.closed:
+            await session.close()
 
     def emit(self, record: logging.LogRecord):
         if not self.is_running:
@@ -123,7 +140,7 @@ logger.addHandler(http_handler)
 
 logger.setLevel(log_level)
 logger.propagate = False
-logger.info('Logger initialized')
+logger.info('Backend initialized')
 
 
 

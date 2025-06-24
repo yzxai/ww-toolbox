@@ -14,7 +14,7 @@ names = re.findall(r'class="card-footer-inner"><span data-v-0d68f878="">(.+?)</s
 for link, name in zip(links, names):
     print(name, link)
 
-target_folder = Path(__file__).parent / "imgs"
+target_folder = Path(__file__).parent / "imgs" / "echo"
 target_folder.mkdir(exist_ok=True)
 
 metadata = []

@@ -1,10 +1,644 @@
 <h1>声骸强化分析助手</h1>
 <hr class="dashed"/>
 
-<button type="button" class="readme-collapsible">
-  README
-  <span class="arrow"></span>
-</button>
-<div class="readme-content">
-  <p>这是第一个页面的内容</p>
+<div class="readme-container">
+    <button type="button" class="readme-collapsible">
+    README
+    <span class="arrow"></span>
+    </button>
+    <div class="readme-content">
+    <p>这是第一个页面的内容</p>
+    </div>
+</div>
+
+<hr class="dashed"/>
+
+<div class="config-panel">
+    <div class="config-row">
+        <div class="avatar-container">
+            <i class="mdi mdi-account"></i>
+        </div>
+        <div class="dropdowns-container">
+            <div class="custom-select-wrapper">
+                <select id="character-select" class="custom-select">
+                    <option value="" disabled selected>选择角色</option>
+                </select>
+            </div>
+            <div class="custom-select-wrapper">
+                <select id="suit-select" class="custom-select">
+                    <option value="" disabled selected>选择套装</option>
+                </select>
+            </div>
+        </div>
+        <div class="separator"></div>
+        <div class="options-container">
+            <div class="inline-dropdowns">
+                <div class="custom-select-wrapper">
+                    <select id="cost-select" class="custom-select" disabled>
+                        <option value="1">COST: 1</option>
+                        <option value="3">COST: 3</option>
+                        <option value="4">COST: 4</option>
+                    </select>
+                </div>
+                <div class="custom-select-wrapper">
+                    <select id="main-entry-select" class="custom-select" disabled>
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+            </div>
+            <div class="custom-select-wrapper">
+                <select id="echo-select" class="custom-select" disabled>
+                    <option value="" disabled selected>目标声骸</option>
+                </select>
+            </div>
+        </div>
+        <div class="separator"></div>
+        <div class="details-container">
+            <button class="details-button" id="details-button">
+                <i class="mdi mdi-cog"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .main-content {
+        overflow-y: auto;
+        height: calc(100vh - 50px); /* Adjust based on your title bar height */
+    }
+    .scheduler-panel {
+        display: flex;
+        padding: 20px;
+        background-color: #2c3e50;
+        border-radius: 8px;
+        margin-top: 1rem;
+        color: white;
+        gap: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        height: 400px; /* Set a fixed height for the entire panel */
+    }
+    .scheduler-chart-container {
+        position: relative;
+        flex: 0 0 40%;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
+        overflow: hidden; /* This helps with clipping visual artifacts */
+    }
+    #scheduler-chart {
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+    }
+    #scheduler-chart.grabbing {
+        cursor: grabbing;
+    }
+    .scheduler-sidebar {
+        flex-grow: 1;
+        display: flex;
+        gap: 20px;
+    }
+    .scheduler-controls {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        flex-basis: 330px; /* 220px * 1.5 */
+        flex-grow: 0;
+    }
+    .apply-button {
+        background-color: #27ae60;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        font-weight: bold;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .apply-button:hover {
+        background-color: #2ecc71;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+    .scheduler-control-row {
+        background-color: #34495e;
+        color: #ecf0f1;
+        padding: 12px;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box; /* Ensure padding is included in width */
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease-in-out;
+    }
+    .scheduler-control-row:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+    .scheduler-control-row label {
+        font-weight: bold;
+        margin-left: 8px;
+    }
+    .scheduler-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .scheduler-input {
+        width: 65px;
+        border: none;
+        border-bottom: 1px solid #7f8c8d;
+        text-align: right;
+        background-color: transparent;
+        color: #ecf0f1;
+        font-size: 1em;
+        padding: 4px 18px 4px 4px; /* Make more space for % sign */
+        -moz-appearance: textfield;
+    }
+    .scheduler-input::-webkit-outer-spin-button,
+    .scheduler-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .scheduler-input:focus {
+        outline: none;
+        border-bottom: 1px solid #3498db;
+    }
+    .percent-sign {
+        position: absolute;
+        right: 4px; /* Adjust position */
+        pointer-events: none;
+        color: #7f8c8d;
+    }
+    .separator-vertical {
+        width: 1px;
+        background-color: #34495e;
+    }
+    .scheduler-results {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 20px;
+        width: 220px;
+    }
+    .result-item {
+        padding: 10px 15px;
+        border-left: 4px solid #3498db;
+        background-color: rgba(52, 152, 219, 0.1);
+        border-radius: 0 4px 4px 0;
+    }
+    .result-label {
+        font-size: 0.9em;
+        color: #bdc3c7;
+    }
+    .result-value {
+        font-size: 1.6em;
+        font-weight: 300;
+        color: #ecf0f1;
+        text-shadow: 0 0 5px rgba(236, 240, 241, 0.3);
+    }
+    .history-panel {
+        display: flex;
+        flex-direction: column;
+        width: 200px; /* Adjust width as needed */
+        padding-left: 20px;
+    }
+    .history-title {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #ecf0f1;
+    }
+    .history-list {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding-right: 10px; /* For scrollbar spacing */
+        min-height: 0; /* Flexbox fix to enable scrolling */
+    }
+    .history-item {
+        padding: 8px;
+        margin-bottom: 8px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .history-item:hover {
+        background-color: rgba(0, 0, 0, 0.4);
+    }
+    .history-item.selected {
+        background-color: #3498db;
+    }
+    .history-thresholds {
+        font-size: 0.8em;
+        color: #bdc3c7;
+        margin-bottom: 4px;
+    }
+    .history-results {
+        font-size: 0.9em;
+        font-weight: bold;
+    }
+
+    .scanned-echos-panel {
+        display: none;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 12px;
+        margin-top: 1rem;
+        color: #343a40;
+        gap: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        height: 640px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        margin-bottom: 40vh;
+    }
+
+    .scanned-echos-list-container {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-content: flex-start;
+        padding: 10px;
+        background: #ffffff;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+
+    .echo-card {
+        position: relative;
+        flex-shrink: 0;
+        width: 100px;
+        height: 125px;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: all 0.2s ease;
+        background-color: #e9ecef;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .echo-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .echo-card.selected {
+        border-color: #007bff;
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    }
+
+    .echo-card.achieved {
+        border-color: #ffc107;
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.7);
+    }
+
+    .echo-card.failed {
+        opacity: 0.5;
+        filter: grayscale(80%);
+    }
+
+    .echo-card.discarded {
+        filter: grayscale(100%);
+        opacity: 0.6;
+    }
+
+    .echo-card-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .echo-card-level {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        text-align: center;
+        font-size: 0.9em;
+        padding: 4px 0;
+    }
+
+    .scanned-echo-details-container {
+        flex-basis: 350px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 0 10px;
+    }
+
+    .scanned-echo-details-container h2 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-weight: 400;
+        color: #495057;
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 10px;
+    }
+
+    #echo-detail-entries {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 15px 0;
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+
+    #echo-detail-entries li {
+        display: flex;
+        justify-content: space-between;
+        background-color: #ffffff;
+        padding: 10px 15px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        font-size: 0.95em;
+        border: 1px solid #e9ecef;
+        transition: all 0.2s ease;
+    }
+
+    #echo-detail-entries li:hover {
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    #echo-detail-entries .entry-name {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    #echo-detail-entries .entry-value {
+        font-weight: 600;
+        color: #007bff;
+    }
+
+    .echo-detail-results {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .scanned-echo-details-container .result-item {
+        padding: 2px 12px;
+        border-left: 4px solid #007bff;
+        background-color: rgba(0, 123, 255, 0.05);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .scanned-echo-details-container .result-label {
+        font-size: 0.85em;
+        color: #6c757d;
+    }
+
+    .scanned-echo-details-container .result-value {
+        font-size: 1.1em;
+        font-weight: 500;
+        color: #343a40;
+        text-shadow: none;
+    }
+    
+    .separator-vertical {
+        width: 1px;
+        background-color: #dee2e6;
+    }
+
+    .scanned-echos-left-panel {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 10px 10px 10px;
+        flex-shrink: 0;
+    }
+
+    .panel-header h3 {
+        margin: 0;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .panel-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .icon-btn {
+        background-color: #ffffff;
+        border: 1px solid #ced4da;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        color: #6c757d;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .icon-btn:hover {
+        background-color: #e9ecef;
+        color: #007bff;
+        border-color: #b8daff;
+    }
+
+    .icon-btn:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+        color: #adb5bd;
+    }
+
+    .icon-btn.btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .icon-btn.btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+
+    .icon-btn.btn-danger {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+
+    .icon-btn.btn-danger:hover {
+        background-color: #c82333;
+        border-color: #bd2130;
+    }
+
+    .scheduler-actions-container {
+        display: flex;
+        gap: 5%;
+        width: 100%;
+    }
+
+    .default-params-button {
+        width: 60%;
+        background-color: #ffc107;
+        color: #212529;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        box-sizing: border-box;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .default-params-button:hover {
+        background-color: #e0a800;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .scheduler-actions-container .apply-button {
+        width: 35%;
+    }
+</style>
+
+<hr class="dashed"/>
+
+<div class="scheduler-panel" id="scheduler-panel" style="display: none;">
+    <div class="scheduler-chart-container">
+        <canvas id="scheduler-chart"></canvas>
+    </div>
+    <div class="scheduler-sidebar">
+        <div class="scheduler-controls">
+            <div class="scheduler-control-row">
+                <label>Lv5~9 丢弃阈值</label>
+                <div class="scheduler-input-wrapper">
+                    <input type="number" class="scheduler-input" id="scheduler-input-0" min="0" max="100" step="0.01" value="0.00">
+                    <span class="percent-sign">%</span>
+                </div>
+            </div>
+            <div class="scheduler-control-row">
+                <label>Lv10~14 丢弃阈值</label>
+                <div class="scheduler-input-wrapper">
+                    <input type="number" class="scheduler-input" id="scheduler-input-1" min="0" max="100" step="0.01" value="0.00">
+                    <span class="percent-sign">%</span>
+                </div>
+            </div>
+            <div class="scheduler-control-row">
+                <label>Lv15~19 丢弃阈值</label>
+                <div class="scheduler-input-wrapper">
+                    <input type="number" class="scheduler-input" id="scheduler-input-2" min="0" max="100" step="0.01" value="0.00">
+                    <span class="percent-sign">%</span>
+                </div>
+            </div>
+            <div class="scheduler-control-row">
+                <label>Lv20~24 丢弃阈值</label>
+                <div class="scheduler-input-wrapper">
+                    <input type="number" class="scheduler-input" id="scheduler-input-3" min="0" max="100" step="0.01" value="0.00">
+                    <span class="percent-sign">%</span>
+                </div>
+            </div>
+            <div class="scheduler-actions-container">
+                <button id="default-params-btn" class="default-params-button">使用默认参数</button>
+                <button id="apply-scheduler-button" class="apply-button">应用</button>
+            </div>
+        </div>
+        <div class="separator-vertical"></div>
+        <div class="scheduler-results">
+            <div class="result-item">
+                <p class="result-label">单声骸达标概率</p>
+                <p id="scheduler-prob" class="result-value">N/A</p>
+            </div>
+            <div class="result-item">
+                <p class="result-label">期望损失经验值</p>
+                <p id="scheduler-exp" class="result-value">N/A</p>
+            </div>
+        </div>
+        <div class="separator-vertical"></div>
+        <div class="history-panel">
+            <h3 class="history-title">历史记录</h3>
+            <div id="history-list" class="history-list"></div>
+        </div>
+    </div>
+</div>
+
+<div class="scanned-echos-panel" id="scanned-echos-panel">
+    <div class="scanned-echos-left-panel">
+        <div class="panel-header">
+            <h3>已扫描声骸</h3>
+            <div class="panel-actions">
+                <button id="apply-filter-btn" class="icon-btn" title="应用筛选">
+                    <i class="mdi mdi-filter-variant"></i>
+                </button>
+                <button id="scan-echos-btn" class="icon-btn" title="扫描声骸">
+                    <i class="mdi mdi-scanner"></i>
+                </button>
+                <button id="start-work-btn" class="icon-btn" title="开始强化" disabled>
+                    <i class="mdi mdi-play"></i>
+                </button>
+            </div>
+        </div>
+        <div class="scanned-echos-list-container" id="scanned-echos-list">
+        </div>
+    </div>
+    <div class="separator-vertical"></div>
+    <div class="scanned-echo-details-container" id="scanned-echo-details-container">
+        <h2>声骸详情</h2>
+        <ul id="echo-detail-entries">
+        </ul>
+        <div class="echo-detail-results">
+            <div class="result-item">
+                <p class="result-label">达标概率</p>
+                <p id="echo-detail-prob" class="result-value">N/A</p>
+            </div>
+            <div class="result-item">
+                <p class="result-label">期望损失经验值</p>
+                <p id="echo-detail-exp" class="result-value">N/A</p>
+            </div>
+            <div class="result-item">
+                <p class="result-label">当前分数</p>
+                <p id="echo-detail-score" class="result-value">N/A</p>
+            </div>
+            <div class="result-item">
+                <p class="result-label">满级期望得分</p>
+                <p id="echo-detail-expected-score" class="result-value">N/A</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="settings-overlay" id="settings-overlay">
+    <div class="settings-content">
+        <h2 class="settings-title">词条权重设置</h2>
+        <div class="settings-header">
+            <span class="col-name">属性名</span>
+            <span class="col-weight">权重</span>
+            <div class="col-target">
+                <span>目标值</span>
+                <span id="expected-score-display">期望得分: 0.00</span>
+                <span id="total-score-display">总分: 0.00</span>
+                <span id="prob-above-threshold-display">达标概率: 0.00%</span>
+            </div>
+        </div>
+        <div id="detailed-settings-container" class="settings-container"></div>
+        <button id="close-settings" class="close-settings-button">
+            <i class="mdi mdi-close"></i>
+        </button>
+    </div>
 </div>

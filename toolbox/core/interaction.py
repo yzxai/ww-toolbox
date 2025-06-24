@@ -31,7 +31,7 @@ class Interaction:
                 if class_name == "UnrealWindow":
                     self.game_hwnd = hwnd
                     self.connected = True
-                    logger.info(f'Connected to game window: {self.game_hwnd}')
+                    logger.debug(f'Connected to game window: {self.game_hwnd}')
                     return False
             return True
         
@@ -47,7 +47,7 @@ class Interaction:
         if self.connected:
             if win32gui.IsWindow(self.game_hwnd):
                 return True 
-        logger.warning('Game window not found, attempting to reconnect...')
+        logger.debug('Game window not found, attempting to reconnect...')
         status = self.connect()
         if not status:
             logger.critical('Failed to reconnect to game window')
@@ -235,8 +235,6 @@ class Interaction:
         time.sleep(0.03)
         win32api.SendMessage(self.game_hwnd, win32con.WM_KEYUP, ord(key), 0)
         time.sleep(0.02)
-
-        logger.info(f'Sent key: {key}')
     
     def _recognize_region(self, region: tuple[float, float, float, float] | str) -> tuple[float, float, float, float] | None:
         if isinstance(region, str):
@@ -259,7 +257,7 @@ class Interaction:
         
         return region
 
-    def click_ocr(self, pattern: str, region: tuple[float, float, float, float] | str = None, max_retries: int = 3):
+    def click_ocr(self, pattern: str, region: tuple[float, float, float, float] | str = None, max_retries: int = 5):
         """
         Click on the game window at the specified coordinates.
         Args:
@@ -289,7 +287,12 @@ class Interaction:
             result = results[0]
             width, height = self.get_app_window_size()
             x, y = (result.box[0] + result.box[2]) / 2 / width, (result.box[1] + result.box[3]) / 2 / height
-            self.click(x + region[0], y + region[1])
+
+            if region is not None:
+                self.click(x + region[0], y + region[1])
+            else:
+                self.click(x, y)
+
             return
         
         logger.critical(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
