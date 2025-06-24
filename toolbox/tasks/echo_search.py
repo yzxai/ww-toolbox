@@ -58,7 +58,7 @@ class EchoSearch(EchoTask):
 
             # check if (x_ratio, y_ratio) points to an echo
             pixel = screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
-            if greyscale_value(pixel) > 30:
+            if greyscale_value(pixel) > 50:
                 break
 
             num_checked += 1
@@ -102,7 +102,7 @@ class EchoSearch(EchoTask):
             _tmp_screenshot = self.interaction.screenshot()
             pixel = _tmp_screenshot.getpixel((int(width * 0.125), int(height * 0.268)))
 
-            if greyscale_value(pixel) <= 30:
+            if greyscale_value(pixel) <= 50:
                 if last_line_valid is False:
                     for i in range(3):
                         x_ratio = left_top[0] + (i % 3) * (right_bottom[0] - left_top[0]) / 2
@@ -110,7 +110,7 @@ class EchoSearch(EchoTask):
 
                         pixel = _tmp_screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
 
-                        if greyscale_value(pixel) <= 30:
+                        if greyscale_value(pixel) <= 50:
                             # quick check on the level 
                             while True:
                                 _screenshot = self.interaction.screenshot_region(x_ratio, y_ratio - 0.017, x_ratio + 0.036, y_ratio + 0.023)

@@ -41,7 +41,9 @@ class EchoScan(EchoTask):
 
             # 2.1 check if (x_ratio, y_ratio) points to an echo
             pixel = screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
-            if greyscale_value(pixel) > 30:
+
+            logger.info(f"greyscale value: {greyscale_value(pixel)}")
+            if greyscale_value(pixel) > 50:
                 break
 
             # 2.2 click on the echo 
@@ -78,14 +80,14 @@ class EchoScan(EchoTask):
             _tmp_screenshot = self.interaction.screenshot()
             pixel = _tmp_screenshot.getpixel((int(width * 0.125), int(height * 0.268)))
 
-            if greyscale_value(pixel) <= 30:
+            if greyscale_value(pixel) <= 50:
                 if last_line_valid is False:
                     for i in range(3):
                         x_ratio = left_top[0] + (i % 3) * (right_bottom[0] - left_top[0]) / 2
                         y_ratio = 0.856 
 
                         pixel = _tmp_screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
-                        if greyscale_value(pixel) <= 30:
+                        if greyscale_value(pixel) <= 50:
                             # click on the echo 
                             self.interaction.click(x_ratio, 0.836)
 
