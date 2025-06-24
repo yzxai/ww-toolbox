@@ -211,25 +211,23 @@
         });
 
         // 窗口控制逻辑
-        const { ipcRenderer } = require('electron');
-
         document.getElementById('minimize-button').addEventListener('click', () => {
-            ipcRenderer.send('minimize-window');
+            window.electronAPI.minimizeWindow();
         });
 
         document.getElementById('maximize-button').addEventListener('click', () => {
-            ipcRenderer.send('maximize-window');
+            window.electronAPI.maximizeWindow();
         });
 
         document.getElementById('close-button').addEventListener('click', () => {
-            ipcRenderer.send('close-window');
+            window.electronAPI.closeWindow();
         });
 
         // 调试信息栏逻辑：每条消息单独显示
         const debugContent = document.querySelector('.debug-content');
         const debugLatest = document.querySelector('.debug-latest');
 
-        ipcRenderer.on('debug-message', (event, content, type) => {
+        window.electronAPI.onDebugMessage((content, type) => {
             const now = new Date().toLocaleTimeString();
             const line = document.createElement('div');
             line.className = 'debug-line';

@@ -42,7 +42,7 @@ class EchoScan(EchoTask):
             # 2.1 check if (x_ratio, y_ratio) points to an echo
             pixel = screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
 
-            logger.info(f"greyscale value: {greyscale_value(pixel)}")
+            logger.debug(f"greyscale value: {greyscale_value(pixel)}")
             if greyscale_value(pixel) > 50:
                 break
 

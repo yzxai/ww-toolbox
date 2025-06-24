@@ -168,8 +168,11 @@ class Interaction:
         # Make the window think it's being activated.
         win32api.SendMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
 
-        # this is only for visual effect, not necessary
-        win32api.SetCursorPos((x, y))
+
+        # Get the coordinates of the left top corner of the window and add to (x, y)
+        rect = win32gui.GetWindowRect(self.game_hwnd)
+        left, top = rect[0], rect[1]
+        win32api.SetCursorPos((x + left, y + top))
         
         # Now send the standard click messages
         win32api.SendMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
@@ -190,7 +193,10 @@ class Interaction:
         width, height = self.get_app_window_size()
         x, y = int(width * x_ratio), int(height * y_ratio)
 
-        win32api.SetCursorPos((x, y))
+        # Get the coordinates of the left top corner of the window and add to (x, y)
+        rect = win32gui.GetWindowRect(self.game_hwnd)
+        left, top = rect[0], rect[1]
+        win32api.SetCursorPos((x + left, y + top))
         
         # Send the scroll messages
         position = win32api.MAKELONG(x, y)

@@ -9,15 +9,24 @@ let mainWindow;
 let pythonProcess;
 
 function createWindow() {
+  const iconPath = !app.isPackaged
+    ? path.join(__dirname, '..', 'assets', 'icon.png') 
+    : path.join(process.resourcesPath, 'assets', 'icon.png');
+
+  const preloadPath = !app.isPackaged
+    ? path.join(__dirname, 'preload.js')
+    : path.join(process.resourcesPath, 'preload.js');
+
   mainWindow = new BrowserWindow({
     width: 1920,
     height: 1080,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      preload: preloadPath,
+      nodeIntegration: false,
+      contextIsolation: true
     },
     backgroundColor: '#1a1a1a',
-    icon: path.join(__dirname, 'assets/icon.png'),
+    icon: iconPath,
     frame: false,
     titleBarStyle: 'hidden'
   });
@@ -25,10 +34,20 @@ function createWindow() {
 }
 
 function startBackend() {
-  const scriptPath = path.join(__dirname, '..', 'main.py');
-  pythonProcess = spawn('python', [scriptPath], {
-    cwd: path.join(__dirname, '..')
-  });
+  let backendPath, backendArgs;
+
+  if (!app.isPackaged) {
+    const scriptPath = path.join(__dirname, '..', 'main.py');
+    pythonProcess = spawn('python', [scriptPath], {
+      cwd: path.join(__dirname, '..')
+    });
+  } else {
+    backendPath = path.join(process.resourcesPath, 'backend', 'main.exe');
+    backendArgs = [];
+    pythonProcess = spawn(backendPath, backendArgs, {
+      cwd: path.dirname(backendPath)
+    });
+  }
 
   pythonProcess.stdout.on('data', (data) => {
       console.log(`${data}`);
@@ -96,6 +115,13 @@ function initializeApp() {
 }
 
 app.whenReady().then(async () => {
+  ipcMain.handle('get-env-vars', () => {
+    return {
+      isDev: !app.isPackaged,
+      assetsPathInProd: app.isPackaged ? path.join(process.resourcesPath, 'assets') : ''
+    };
+  });
+
   const isElevated = await isAdmin();
   if (!isElevated) {
     const execPath = process.execPath;

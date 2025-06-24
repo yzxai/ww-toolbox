@@ -9,7 +9,7 @@ class EchoPunch(EchoTask):
     Upgrade the echo to the next stage, punch the echo and return the upgraded profile.
     After finished, we will stay on the upgrade page.
     """
-    def run(self, profile: EchoProfile) -> EchoProfile:
+    def run(self, profile: EchoProfile, work_state: dict) -> EchoProfile:
         self.interaction.ensure_connected()
         self.to_page(Page.UPGRADE)
         self.interaction.click(0.288, 0.70)
@@ -33,6 +33,7 @@ class EchoPunch(EchoTask):
 
         captured = False
         for _ in range(10):
+            if work_state["cancel_requested"]: return None
             screenshot = self.interaction.screenshot_region(0.546, 0.35, 0.641, 0.426)
             level = ocr_pattern(screenshot, "\d+")
             if len(level) > 0:
@@ -59,9 +60,10 @@ class EchoPunch(EchoTask):
 
         self.to_page(Page.TUNE)
         self.interaction.click(0.227, 0.922)
-        time.sleep(0.8)
+        time.sleep(1.2)
 
         while True:
+            if work_state["cancel_requested"]: return None
             screenshot = self.interaction.screenshot_region(0.346, 0.371, 0.679, 0.402)
             entry_str = ocr(screenshot)
 

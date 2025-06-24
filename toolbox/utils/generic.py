@@ -5,13 +5,16 @@ import os
 import sys
 
 def get_project_root() -> Path:
-    return Path(__file__).parent.parent.parent
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent.parent
+    else:
+        return Path(__file__).parent.parent.parent
 
 def get_assets_dir() -> Path:
     return get_project_root() / "assets"
 
 def get_config_dir() -> Path:
-    return get_project_root() / "assets" / "config"
+    return get_assets_dir() / "config"
 
 def get_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")

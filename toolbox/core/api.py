@@ -90,21 +90,26 @@ async def get_analysis(
         expected_total_wasted_exp=expected_total_wasted_exp
     )
 
-async def upgrade_echo(profile: EchoProfile) -> EchoProfile:
+async def upgrade_echo(profile: EchoProfile, work_state: dict) -> EchoProfile:
     global current_filter
     
     def blocking_code():
+        # Check for cancellation before starting
+        if work_state["cancel_requested"]:
+            return None
+
         search_task = EchoSearch()
         if current_filter is not None:
-            result = search_task.run(profile, main_entry_filter=current_filter.main_entry)
+            result = search_task.run(profile, work_state, main_entry_filter=current_filter.main_entry)
         else:
-            result = search_task.run(profile)
+            result = search_task.run(profile, work_state)
 
-        if result is None:
+        # Check for cancellation after search
+        if result is None or work_state["cancel_requested"]:
             return None
 
         upgrade_task = EchoPunch()
-        return upgrade_task.run(result)
+        return upgrade_task.run(result, work_state)
         
     result = await run_in_threadpool(blocking_code)
     

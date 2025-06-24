@@ -9,7 +9,7 @@ class EchoSearch(EchoTask):
     Search for the target echo in the main page and return the profile if found, None otherwise.
     After finished, we will stay on the main page with the target echo selected.
     """
-    def run(self, profile: EchoProfile, main_entry_filter: str = None) -> EchoProfile:
+    def run(self, profile: EchoProfile, work_state: dict, main_entry_filter: str = None) -> EchoProfile:
         logger.info(f"Searching for echo: {profile}")
         logger.info(f"Main entry filter: {main_entry_filter}")
 
@@ -34,6 +34,7 @@ class EchoSearch(EchoTask):
 
         def check_profile_matched() -> EchoProfile:
             while True:
+                if work_state["cancel_requested"]: return None
                 profile_img = self.interaction.screenshot_region(0.7356, 0.1264, 0.952, 0.458)
                 curr_profile = EchoProfile().from_image(profile_img)
 
@@ -53,6 +54,7 @@ class EchoSearch(EchoTask):
 
 
         for i in range(15):
+            if work_state["cancel_requested"]: return None
             x_ratio = left_top[0] + (i  % 3) * (right_bottom[0] - left_top[0]) / 2
             y_ratio = left_top[1] + (i // 3) * (right_bottom[1] - left_top[1]) / 4 
 
@@ -71,8 +73,7 @@ class EchoSearch(EchoTask):
                     level = int(level[0].text[1:])
                     break
 
-                logger.info(f"ocr failed, retrying...")
-                _screenshot.show()
+                logger.info(f"ocr failed when checking the level, retrying...")
                 time.sleep(0.5)
             
             if level > profile.level:
@@ -97,6 +98,7 @@ class EchoSearch(EchoTask):
 
         self.interaction.scroll(0.192, 0.544, 9.0)
         while True:
+            if work_state["cancel_requested"]: return None
             self.interaction.scroll(0.192, 0.544, 0.08)
 
             _tmp_screenshot = self.interaction.screenshot()
@@ -118,6 +120,9 @@ class EchoSearch(EchoTask):
                                 if len(level) > 0:
                                     level = int(level[0].text[1:])
                                     break
+
+                                logger.info(f"ocr failed when checking the level, retrying...")
+                                time.sleep(0.5)
                             
                             if level > profile.level:
                                 continue

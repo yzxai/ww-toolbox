@@ -16,6 +16,11 @@ import os
 
 from toolbox.utils.logger import logger
 
+# Global state to handle task cancellation
+WORK_STATE = {
+    "cancel_requested": False
+}
+
 def handle_sigint(sig, frame):
     """
     Handles the SIGINT signal (Ctrl+C) to forcefully exit the application.
@@ -36,6 +41,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.post("/api/stop_work")
+async def stop_work_endpoint():
+    """
+    Sets a global flag to signal the current long-running task to stop.
+    """
+    logger.info("Received stop signal. Attempting to stop current work.")
+    WORK_STATE["cancel_requested"] = True
+    return {"message": "Stop signal received."}
 
 @app.post("/api/apply_filter")
 async def apply_filter_endpoint(filter_data: dict):
@@ -111,11 +125,17 @@ async def get_full_analysis_endpoint(data: dict):
 
 @app.post("/api/upgrade_echo")
 async def upgrade_echo_endpoint(profile_data: dict):
+    # Reset cancellation flag at the start of a new task
+    WORK_STATE["cancel_requested"] = False
+
     profile = EchoProfile(level=0)
     if profile_data and profile_data.get('level', 0) > 0:
         profile = EchoProfile().from_dict(profile_data)
     
-    new_profile = await api.upgrade_echo(profile)
+    # --- IMPORTANT ---
+    # The core api.upgrade_echo function must be modified to accept
+    # the WORK_STATE and periodically check WORK_STATE["cancel_requested"].
+    new_profile = await api.upgrade_echo(profile, WORK_STATE)
     return new_profile
 
 @app.post("/api/get_echo_search_result")
@@ -124,5 +144,4 @@ async def get_echo_search_result_endpoint(data: dict):
     return {"message": "Echo search finished"}
 
 if __name__ == '__main__':
-    app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
     uvicorn.run(app, host="127.0.0.1", port=8000, log_config=None)

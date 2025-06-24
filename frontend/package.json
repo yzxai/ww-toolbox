@@ -1,6 +1,6 @@
 {
   "name": "ww",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Wuthering Waves Toolbox",
   "main": "main.js",
   "scripts": {
@@ -17,5 +17,40 @@
     "is-admin": "^3.0.0",
     "tailwindcss": "^3.4.1",
     "tree-kill": "^1.2.2"
+  },
+  "build": {
+    "appId": "com.wutheringwaves.toolbox",
+    "files": [
+      "main.js",
+      "index.html",
+      "page1.js",
+      "page1.html",
+      "page2.html",
+      "page3.html",
+      "styles.css"
+    ],
+    "extraResources": [
+      {
+        "from": "preload.js",
+        "to": "preload.js"
+      },
+      {
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "../assets",
+        "to": "assets",
+        "filter": [
+          "!**/*.py"
+        ]
+      }
+    ],
+    "productName": "Wuthering Waves Toolbox",
+    "copyright": "Copyright © 2025 PlanarG",
+    "win": {
+      "icon": "../assets/icon.ico",
+      "target": ["nsis"]
+    }
   }
 }
