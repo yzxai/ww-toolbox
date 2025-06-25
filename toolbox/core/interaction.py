@@ -166,18 +166,17 @@ class Interaction:
         position = win32api.MAKELONG(x, y)
 
         # Make the window think it's being activated.
-        win32api.SendMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
 
-
-        # Get the coordinates of the left top corner of the window and add to (x, y)
-        rect = win32gui.GetWindowRect(self.game_hwnd)
-        left, top = rect[0], rect[1]
-        win32api.SetCursorPos((x + left, y + top))
+        # # Get the coordinates of the left top corner of the window and add to (x, y)
+        # rect = win32gui.GetWindowRect(self.game_hwnd)
+        # left, top = rect[0], rect[1]
+        # win32api.SetCursorPos((x + left, y + top))
         
         # Now send the standard click messages
-        win32api.SendMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
         time.sleep(0.1)
-        win32api.SendMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, position)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, position)
         time.sleep(0.1)
     
     def scroll(self, x_ratio: float, y_ratio: float, delta: int):
