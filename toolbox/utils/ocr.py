@@ -1,11 +1,13 @@
 from rapidocr import RapidOCR, EngineType
 from PIL import Image, ImageFilter, ImageEnhance
 from dataclasses import dataclass
+from toolbox.utils.logger import logger
 
 import math
 import re
 import numpy as np
 import cv2
+import random
 
 engine = None
 
@@ -25,7 +27,7 @@ class OCRResult:
     box: tuple[int, int, int, int]
     confidence: float
 
-def ocr(image: Image.Image) -> str:
+def ocr(image: Image.Image, split: str = ' ') -> str:
     """
     Perform OCR on a PIL Image and return the detected text.
     Args:
@@ -42,7 +44,7 @@ def ocr(image: Image.Image) -> str:
     for text, box in zip(texts, boxes):
         if box[0][1] >= last_right_bottom_y - 2:
             predicted += "\n"
-        predicted += text + ' '
+        predicted += text + split
         last_right_bottom_y = box[2][1]
 
     return predicted.strip()
@@ -67,123 +69,103 @@ def ocr_pattern(image: Image.Image, pattern: str) -> list[OCRResult]:
     texts, boxes, scores = result.txts, result.boxes, result.scores
 
     results = []
-    for text, box, score in zip(texts, boxes, scores):
-        if re.search(pattern, text):
-            matched_text = re.search(pattern, text).group(0)
-            results.append(OCRResult(matched_text, (box[0][0], box[0][1], box[2][0], box[2][1]), score))
+    try:
+        for text, box, score in zip(texts, boxes, scores):
+            if re.search(pattern, text):
+                matched_text = re.search(pattern, text).group(0)
+                results.append(OCRResult(matched_text, (box[0][0], box[0][1], box[2][0], box[2][1]), score))
+    except Exception as e:
+        logger.warning(f"Error in ocr_pattern: {e}")
+        return []
 
     return results
 
-def match_single_object_akaze(query_img: Image.Image, target_img: Image.Image, debug=False) -> tuple[int, int] | None:
+def match_single_object_template(
+    query_img: Image.Image, 
+    target_img: Image.Image, 
+    match_threshold=0.5, 
+    scale_range=(0.8, 1.2), 
+    scale_steps=5, 
+    debug=False
+) -> tuple[int, int] | None:
     """
-    Finds the unique matching position of query_img in target_img using AKAZE features
-    and histogram equalization on grayscale images.
+    Finds an object in a target image using multi-scale template matching on their Canny edge maps.
+    This method is robust for objects with consistent shape and rotation, and can handle variations in scale.
 
     Args:
-        query_img (PIL.Image.Image): The smaller image to be matched (grayscale or color).
-        target_img (PIL.Image.Image): The image to search within (grayscale or color).
+        query_img (PIL.Image.Image): The template image to find.
+        target_img (PIL.Image.Image): The image to search within.
+        match_threshold (float): The minimum correlation score to be considered a good match. Higher is better.
+        scale_range (tuple): The range of scales (min_scale, max_scale) to search.
+        scale_steps (int): The number of steps to iterate through within the scale range.
         debug (bool): Whether to display matching visualization.
 
     Returns:
-        tuple[int, int] | None: center coordinates (x, y) of the matched bounding box or None if not found.
+        tuple[int, int] | None: Center coordinates (x, y) of the matched object or None if not found.
     """
-    # Convert PIL Image to numpy array
-    query_img_np = np.array(query_img)
-    target_img_np = np.array(target_img)
-
-    # Convert RGB (from PIL) to BGR (for OpenCV)
-    if query_img_np.ndim == 3:
-        query_img_np = cv2.cvtColor(query_img_np, cv2.COLOR_RGB2BGR)
-    if target_img_np.ndim == 3:
-        target_img_np = cv2.cvtColor(target_img_np, cv2.COLOR_RGB2BGR)
+    query_np = np.array(query_img.convert('L'))
+    target_np = np.array(target_img.convert('L'))
     
-    def preprocess(img):
-        if img.ndim == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return cv2.equalizeHist(img)  # Equalize histogram to improve brightness robustness
-
-    # Preprocess both images
-    query_gray = preprocess(query_img_np)
-    target_gray = preprocess(target_img_np)
-
-    # AKAZE feature extraction
-    akaze = cv2.AKAZE_create()
-    kp1, des1 = akaze.detectAndCompute(query_gray, None)
-    kp2, des2 = akaze.detectAndCompute(target_gray, None)
-
-    if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+    query_edges = cv2.Canny(query_np, 50, 200)
+    if np.sum(query_edges) == 0:
         return None
+    
+    tH, tW = query_edges.shape
 
-    # Matching (using Euclidean distance)
-    bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-    matches = bf.match(des1, des2)
-    if len(matches) < 4:
-        return None
+    # Keep track of the best match found across all scales.
+    best_match = None
 
-    # Sort by distance
-    matches = sorted(matches, key=lambda x: x.distance)
+    # Loop over the defined scales.
+    for scale in np.linspace(scale_range[0], scale_range[1], scale_steps)[::-1]:
+        # Resize the target image for the current scale and compute its edge map.
+        resized_target = cv2.resize(target_np, (int(target_np.shape[1] * scale), int(target_np.shape[0] * scale)))
+        
+        # If the resized image is smaller than the template, we can stop.
+        if resized_target.shape[0] < tH or resized_target.shape[1] < tW:
+            break
 
-    # RANSAC geometric verification
-    src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-    dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        target_edges = cv2.Canny(resized_target, 50, 200)
 
-    M, mask = cv2.estimateAffinePartial2D(src_pts, dst_pts)
-    if M is None or mask is None or mask.sum() < 4:
-        return None
+        # Perform template matching.
+        result = cv2.matchTemplate(target_edges, query_edges, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    # Decompose the affine matrix to remove the rotational component, as we assume
-    # the matching does not involve rotation. This provides a more stable bounding box
-    # for scale-only transformations.
-    # M = [[s*cos(t), -s*sin(t), tx], [s*sin(t), s*cos(t), ty]]
-    scale = np.sqrt(M[0, 0]**2 + M[1, 0]**2)
-    tx = M[0, 2]
-    ty = M[1, 2]
-    M_no_rotation = np.float32([[scale, 0, tx], [0, scale, ty]])
+        # If we have found a new best match, update the tracking variable.
+        if best_match is None or max_val > best_match[0]:
+            best_match = (max_val, max_loc, scale)
 
-    # Map query border to target using the rotation-free matrix
-    h, w = query_gray.shape
-    corners = np.float32([[0, 0], [w, 0], [w, h], [0, h]]).reshape(-1, 1, 2)
-    dst_corners = cv2.transform(corners, M_no_rotation)
+    # Check if the best match meets the threshold.
+    if best_match and best_match[0] >= match_threshold:
+        max_val, max_loc, scale = best_match
+        
+        # Adjust coordinates back to the original image size.
+        top_left_unscaled = (int(max_loc[0] / scale), int(max_loc[1] / scale))
+        w_unscaled = int(tW / scale)
+        h_unscaled = int(tH / scale)
 
-    # Calculate the center of the bounding box
-    x_coords = dst_corners[:, 0, 0]
-    y_coords = dst_corners[:, 0, 1]
-    center_x = (np.min(x_coords) + np.max(x_coords)) / 2
-    center_y = (np.min(y_coords) + np.max(y_coords)) / 2
+        center_x = top_left_unscaled[0] + w_unscaled // 2
+        center_y = top_left_unscaled[1] + h_unscaled // 2
 
-    if debug:
-        target_vis = target_img_np.copy()
-        if target_vis.ndim == 2:
-            target_vis = cv2.cvtColor(target_vis, cv2.COLOR_GRAY2BGR)
-            
-        cv2.polylines(target_vis, [np.int32(dst_corners)], isClosed=True, color=(0, 255, 0), thickness=2)
-        cv2.imshow("Match Visualization", target_vis)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        if debug:
+            target_vis = np.array(target_img.convert('RGB'))
+            target_vis = cv2.cvtColor(target_vis, cv2.COLOR_RGB2BGR)
+            bottom_right = (top_left_unscaled[0] + w_unscaled, top_left_unscaled[1] + h_unscaled)
+            cv2.rectangle(target_vis, top_left_unscaled, bottom_right, (0, 255, 0), 2)
+            cv2.circle(target_vis, (center_x, center_y), 5, (0, 0, 255), -1)
+            cv2.imshow(f"Template Match (Score: {max_val:.2f}, Scale: {scale:.2f})", target_vis)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
 
-    return int(center_x), int(center_y)
+        return (center_x, center_y)
 
-def detect_and_merge_rectangles_pil(
+    return None
+
+def _detect_rectangles_raw(
     pil_image: Image.Image,
     aspect_ratio_range=(0.8, 1.2),
-    area_range=(300, 1e3),
-    iou_threshold=0.2,
-    debug=False
+    area_range=(300, 1e3)
 ) -> list[tuple[int, int, int, int]]:
-    """
-    Detects and merges all rectangular (or rounded rectangular) regions from a PIL image.
-
-    Args:
-        pil_image (PIL.Image): The input image.
-        aspect_ratio_range (tuple): The aspect ratio range (min_ratio, max_ratio).
-        area_range (tuple): The area range (min_area, max_area).
-        iou_threshold (float): The IoU threshold for merging rectangles.
-        debug (bool): Whether to visualize the results.
-
-    Returns:
-        list[tuple[int, int, int, int]]: A list of merged rectangles as (x, y, w, h).
-    """
-    # Convert to OpenCV format
+    """Detects raw rectangular regions from a PIL image without merging."""
     image = np.array(pil_image)
     if image.ndim == 2:
         gray = image.copy()
@@ -192,59 +174,107 @@ def detect_and_merge_rectangles_pil(
     else:
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
-    # Edge detection
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blur, 50, 150)
-
-    # Contour extraction (RETR_LIST supports nested structures)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     rects = []
-
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < area_range[0] or area > area_range[1]:
+        if not (area_range[0] < area < area_range[1]):
             continue
 
         epsilon = 0.02 * cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, epsilon, True)
 
-        if len(approx) != 4:
-            continue
+        if len(approx) == 4:
+            def angle(pt1, pt2, pt0):
+                dx1 = pt1[0] - pt0[0]
+                dy1 = pt1[1] - pt0[1]
+                dx2 = pt2[0] - pt0[0]
+                dy2 = pt2[1] - pt0[1]
+                return (dx1 * dx2 + dy1 * dy2) / (math.hypot(dx1, dy1) * math.hypot(dx2, dy2) + 1e-8)
 
-        def angle(pt1, pt2, pt0):
-            """Helper to compute angle between three points."""
-            dx1 = pt1[0] - pt0[0]
-            dy1 = pt1[1] - pt0[1]
-            dx2 = pt2[0] - pt0[0]
-            dy2 = pt2[1] - pt0[1]
-            return (dx1 * dx2 + dy1 * dy2) / (math.hypot(dx1, dy1) * math.hypot(dx2, dy2) + 1e-8)
+            pts = approx.reshape(-1, 2)
+            max_cos = max(abs(angle(pts[i], pts[(i + 2) % 4], pts[(i + 1) % 4])) for i in range(4))
+            if max_cos > 0.3:
+                continue
 
-        pts = approx.reshape(-1, 2)
-        max_cos = max(abs(angle(pts[i], pts[(i + 2) % 4], pts[(i + 1) % 4])) for i in range(4))
-        if max_cos > 0.3:
-            continue
+            x, y, w, h = cv2.boundingRect(approx)
+            aspect_ratio = w / h if h > 0 else 0
+            if not (aspect_ratio_range[0] <= aspect_ratio <= aspect_ratio_range[1]):
+                continue
+            
+            rects.append((x, y, w, h))
+            
+    return rects
 
-        x, y, w, h = cv2.boundingRect(approx)
-        aspect_ratio = w / h if h > 0 else 0
-        if not (aspect_ratio_range[0] <= aspect_ratio <= aspect_ratio_range[1]):
-            continue
+def detect_and_merge_rectangles_pil(
+    pil_image: Image.Image,
+    aspect_ratio_range=(0.8, 1.2),
+    area_range=(300, 1e3),
+    iou_threshold=0.2,
+    num_perturbations=10,
+    debug=False
+) -> list[tuple[int, int, int, int]]:
+    """
+    Detects and merges all rectangular (or rounded rectangular) regions from a PIL image.
+    This version is more robust by applying random perturbations to the image.
 
-        rects.append((x, y, w, h))
+    Args:
+        pil_image (PIL.Image): The input image.
+        aspect_ratio_range (tuple): The aspect ratio range (min_ratio, max_ratio).
+        area_range (tuple): The area range (min_area, max_area).
+        iou_threshold (float): The IoU threshold for merging rectangles.
+        num_perturbations (int): The number of random perturbations to apply.
+        debug (bool): Whether to visualize the results.
 
-    # Merge rectangles
-    merged = merge_rectangles(rects, iou_threshold)
+    Returns:
+        list[tuple[int, int, int, int]]: A list of merged rectangles as (x, y, w, h).
+    """
+    all_rects = []
+
+    # Original image
+    all_rects.extend(_detect_rectangles_raw(pil_image, aspect_ratio_range, area_range))
+
+    # Perturbed images
+    for _ in range(num_perturbations):
+        perturbed_image = pil_image.copy()
+        enhancers = [
+            (ImageEnhance.Brightness, random.uniform(0.9, 1.1)),
+            (ImageEnhance.Contrast, random.uniform(0.9, 1.1)),
+            (ImageEnhance.Sharpness, random.uniform(0.9, 1.1))
+        ]
+        random.shuffle(enhancers)
+        
+        for enhancer, factor in enhancers:
+            perturbed_image = enhancer(perturbed_image).enhance(factor)
+        
+        all_rects.extend(_detect_rectangles_raw(perturbed_image, aspect_ratio_range, area_range))
+
+    # Merge all collected rectangles
+    merged = merge_rectangles(all_rects, iou_threshold)
+
+    merged.sort(key=lambda x: (x[1], x[0]))
+    i = 0
+    while i < len(merged) - 1:
+        if abs(merged[i][1] - merged[i+1][1]) < 5 and merged[i][0] > merged[i+1][0]:
+            merged[i], merged[i+1] = merged[i+1], merged[i]
+            if i > 0:
+                i -= 1
+        else:
+            i += 1
 
     if debug:
-        vis = cv2.cvtColor(blur, cv2.COLOR_GRAY2BGR)
+        vis_image = np.array(pil_image.convert('RGB'))
+        vis_image = cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR)
         for x, y, w, h in merged:
-            cv2.rectangle(vis, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.imshow("Merged Rectangles", vis)
+            cv2.rectangle(vis_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.imshow("Merged Rectangles (Robust)", vis_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
     return merged
-
 
 def merge_rectangles(rects: list[tuple[int, int, int, int]], iou_thresh=0.2) -> list[tuple[int, int, int, int]]:
     """
@@ -281,7 +311,6 @@ def merge_rectangles(rects: list[tuple[int, int, int, int]], iou_thresh=0.2) -> 
 
     return merged
 
-
 def compute_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
     """
     Computes the Intersection over Union (IoU) between two rectangles.
@@ -306,57 +335,9 @@ def compute_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> f
 
 if __name__ == "__main__":
     setup_ocr()
-    img = Image.open("tests/test.png")
-    print(ocr(img))
-    print(ocr_pattern(img, "\d+\.?\d*%"))
-
-    # --- Image matching tests ---
-    print("\n--- Testing match_single_object_akaze ---")
-    
-    # Set to True to visually inspect each test case
-    DEBUG_MATCHING = False 
-
-    try:
-        template_img_orig = Image.open("tests/test-template.png")
-        match_img_orig = Image.open("tests/test-match.png")
-
-        print("Running baseline test...")
-        coords = match_single_object_akaze(template_img_orig, match_img_orig, debug=DEBUG_MATCHING)
-        print(f"  Result: {coords}")
-
-        # Test with color adjustments
-        print("\nRunning color jitter test...")
-        enhancer = ImageEnhance.Brightness(match_img_orig)
-        jittered_img = enhancer.enhance(1.5) # Increase brightness
-        enhancer = ImageEnhance.Contrast(jittered_img)
-        jittered_img = enhancer.enhance(1.5) # Increase contrast
-        coords = match_single_object_akaze(template_img_orig, jittered_img, debug=DEBUG_MATCHING)
-        print(f"  Result on color-jittered image: {coords}")
-        if DEBUG_MATCHING:
-            jittered_img.show()
-            
-        # Test with slight scaling
-        print("\nRunning scaling test...")
-        w, h = match_img_orig.size
-        # Scale down to 90%
-        scaled_img = match_img_orig.resize((int(w * 0.9), int(h * 0.9)))
-        coords = match_single_object_akaze(template_img_orig, scaled_img, debug=DEBUG_MATCHING)
-        print(f"  Result on scaled (0.9x) image: {coords}")
-        if DEBUG_MATCHING:
-            scaled_img.show()
-
-        # Test with slight cropping of the template
-        print("\nRunning template cropping test...")
-        w, h = template_img_orig.size
-        # Crop 5% from each side of the template
-        cropped_template = template_img_orig.crop((int(w * 0.05), int(h * 0.05), int(w * 0.95), int(h * 0.95)))
-        coords = match_single_object_akaze(cropped_template, match_img_orig, debug=DEBUG_MATCHING)
-        print(f"  Result with cropped template: {coords}")
-        if DEBUG_MATCHING:
-            cropped_template.show()
-
-    except FileNotFoundError:
-        print("\nSkipping image matching tests: 'test-template.png' or 'test-match.png' not found.")
+    img = Image.open("tests/test-level.png")
+    print(ocr(img, split=""))
+    print(ocr_pattern(img, "\d+"))
 
     # --- Rectangle detection tests ---
     print("\n--- Testing detect_and_merge_rectangles_pil ---")
@@ -369,4 +350,17 @@ if __name__ == "__main__":
             print(f"    Rect {i+1}: {r}")
             
     except FileNotFoundError:
-        print("\nSkipping rectangle detection tests: 'test-rect.png' not found.")
+        print("\nSkipping rectangle detection tests: 'tests/test-rect2.png' not found.")
+        
+    # --- Template matching tests ---
+    print("\n--- Testing match_single_object_template ---")
+    try:
+        template_img_orig = Image.open("tests/test-template.png")
+        match_img_orig = Image.open("tests/test-match.png")
+
+        print("Running template matching test...")
+        coords = match_single_object_template(template_img_orig, match_img_orig, debug=True)
+        print(f"  Result: {coords}")
+            
+    except FileNotFoundError:
+        print("\nSkipping template matching tests: 'tests/test-template.png' or 'tests/test-match.png' not found.")

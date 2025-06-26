@@ -1,3 +1,4 @@
+from toolbox.core.interaction import Element
 from toolbox.tasks.echo_task import EchoTask, Page
 from toolbox.utils.logger import logger
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ class EchoPageSelector(EchoTask):
         self.interaction.ensure_connected()
 
         self.to_page(Page.MAIN)
+        time.sleep(0.3)
         x_offset = 0.168 if filter.cost == 1 else 0.220 if filter.cost == 3 else 0.272
         self.interaction.click(x_offset, 0.053)
 
@@ -49,7 +51,7 @@ class EchoPageSelector(EchoTask):
             _screen_shot = self.interaction.screenshot_region(0.118, 0.102, 0.201, 0.131)
             if len(ocr_pattern(_screen_shot, filter.suit)) == 0:
                 time.sleep(0.2)
-                self.interaction.click(0.206, 0.118, rand=False)
+                self.interaction.click_img_template(Element.SUIT_FILTER, region="left_top")
                 time.sleep(0.3)
                 self.interaction.click_ocr(filter.suit, region=(0.117, 0.201, 0.213, 0.700))
         
@@ -59,7 +61,7 @@ class EchoPageSelector(EchoTask):
 
             # 3.1 reset the filter 
             self.interaction.click_ocr("重置", region="bottom")
-            self.interaction.click(0.897, 0.572)
+            self.interaction.scroll(0.5, 0.5, 22)
             time.sleep(0.3)
             # special case for "暴击"
             if filter.main_entry == "暴击":

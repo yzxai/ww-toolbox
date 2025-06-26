@@ -1,7 +1,7 @@
 import time
 from toolbox.tasks.echo_task import EchoTask, Page
 from toolbox.core.profile import EchoProfile
-from toolbox.utils.ocr import ocr_pattern
+from toolbox.utils.ocr import detect_and_merge_rectangles_pil, ocr_pattern
 from toolbox.utils.logger import logger
 
 class EchoSearch(EchoTask):
@@ -22,13 +22,11 @@ class EchoSearch(EchoTask):
 
         time.sleep(0.5)
         width, height = self.interaction.get_app_window_size()
-        screenshot = self.interaction.screenshot()
-
-        left_top = (0.125, 0.278)
-        right_bottom = (0.260, 0.844) 
-
-        def greyscale_value(pixel: tuple[int, int, int]) -> float:
-            return 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2]
+        left_top = (0.092, 0.231)
+        right_bottom = (0.294, 0.835) 
+        screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
+        
+        boxes = detect_and_merge_rectangles_pil(screenshot)
         
         num_checked = 0
 
@@ -52,22 +50,18 @@ class EchoSearch(EchoTask):
                 time.sleep(1)
             return None
 
-
-        for i in range(15):
+        for box in boxes:
             if work_state["cancel_requested"]: return None
-            x_ratio = left_top[0] + (i  % 3) * (right_bottom[0] - left_top[0]) / 2
-            y_ratio = left_top[1] + (i // 3) * (right_bottom[1] - left_top[1]) / 4 
 
-            # check if (x_ratio, y_ratio) points to an echo
-            pixel = screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
-            if greyscale_value(pixel) > 50:
-                break
+            x, y, w, h = box
+            x_ratio = (x + w / 2) / width + left_top[0]
+            y_ratio = (y + h / 2) / height + left_top[1]
 
             num_checked += 1
                 
             # quick check on the level 
             while True:
-                _screenshot = self.interaction.screenshot_region(x_ratio, y_ratio - 0.017, x_ratio + 0.04, y_ratio + 0.017)
+                _screenshot = self.interaction.screenshot_region(x_ratio - 0.05, y_ratio + 0.01, x_ratio + 0.05, y_ratio + 0.05)
                 level = ocr_pattern(_screenshot, "^\+\d+")
                 if len(level) > 0:
                     level = int(level[0].text[1:])
@@ -96,49 +90,50 @@ class EchoSearch(EchoTask):
         last_line_valid = True
         continuous_valid_lines, continuous_invalid_lines = 0, 0
 
-        self.interaction.scroll(0.192, 0.544, 9.0)
+        self.interaction.scroll(0.192, 0.544, 8.0)
         while True:
             if work_state["cancel_requested"]: return None
-            self.interaction.scroll(0.192, 0.544, 0.08)
+            self.interaction.scroll(0.192, 0.544, 0.7)
 
-            _tmp_screenshot = self.interaction.screenshot()
-            pixel = _tmp_screenshot.getpixel((int(width * 0.125), int(height * 0.268)))
+            left_top = (0.087, 0.738)
+            right_bottom = (0.297, 0.828)
 
-            if greyscale_value(pixel) <= 50:
+            _tmp_screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
+            boxes = detect_and_merge_rectangles_pil(_tmp_screenshot)
+
+            if len(boxes) > 0:
                 if last_line_valid is False:
-                    for i in range(3):
-                        x_ratio = left_top[0] + (i % 3) * (right_bottom[0] - left_top[0]) / 2
-                        y_ratio = 0.845
+                    for box in boxes:
+                        x, y, w, h = box
+                        x_ratio = (x + w / 2) / width + left_top[0]
+                        y_ratio = (y + h / 2) / height + left_top[1]
 
-                        pixel = _tmp_screenshot.getpixel((int(width * x_ratio), int(height * y_ratio)))
+                        # quick check on the level 
+                        while True:
+                            _screenshot = self.interaction.screenshot_region(x_ratio - 0.05, y_ratio + 0.01, x_ratio + 0.05, y_ratio + 0.05)
+                            level = ocr_pattern(_screenshot, "^\+\d+")
+                            if len(level) > 0:
+                                level = int(level[0].text[1:])
+                                break
 
-                        if greyscale_value(pixel) <= 50:
-                            # quick check on the level 
-                            while True:
-                                _screenshot = self.interaction.screenshot_region(x_ratio, y_ratio - 0.017, x_ratio + 0.036, y_ratio + 0.023)
-                                level = ocr_pattern(_screenshot, "^\+\d+")
-                                if len(level) > 0:
-                                    level = int(level[0].text[1:])
-                                    break
+                            logger.info(f"ocr failed when checking the level, retrying...")
+                            time.sleep(0.5)
+                        
+                        if level > profile.level:
+                            continue
+                        
+                        if level < profile.level:
+                            return None
 
-                                logger.info(f"ocr failed when checking the level, retrying...")
-                                time.sleep(0.5)
-                            
-                            if level > profile.level:
-                                continue
-                            
-                            if level < profile.level:
-                                return None
+                        # click on the echo 
+                        self.interaction.click(x_ratio, y_ratio)
 
-                            # click on the echo 
-                            self.interaction.click(x_ratio, y_ratio)
+                        # extract the echo profile 
+                        curr_profile = check_profile_matched()
+                        if curr_profile is not None:
+                            return curr_profile
 
-                            # extract the echo profile 
-                            curr_profile = check_profile_matched()
-                            if curr_profile is not None:
-                                return curr_profile
-
-                    self.interaction.scroll(0.192, 0.544, 5.4)
+                    self.interaction.scroll(0.192, 0.544, 4)
 
                 last_line_valid = True 
                 continuous_valid_lines += 1

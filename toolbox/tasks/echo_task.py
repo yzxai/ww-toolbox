@@ -1,7 +1,9 @@
 from enum import Enum
 import time
+from toolbox.core.interaction import Element
 from toolbox.tasks.base_task import BaseTask
 from toolbox.utils.ocr import ocr_pattern
+from toolbox.utils.logger import logger
 
 class Page(Enum):
     MAIN = 0
@@ -16,9 +18,9 @@ class EchoTask(BaseTask):
         # setup trasmission graph between pages
         self.graph = {
             Page.MAIN: {
-                Page.SORT: { "action": self.interaction.click, "args": (0.20, 0.925) },
-                Page.FILTER: { "action": self.interaction.click, "args": (0.104, 0.925) },
-                Page.UPGRADE: { "action": self.interaction.click, "args": (0.90, 0.927) },
+                Page.SORT: { "action": self.interaction.click_img_template, "args": (Element.ECHO_SORT, "left_bottom") },
+                Page.FILTER: { "action": self.interaction.click_img_template, "args": (Element.ECHO_FILTER, "left_bottom") },
+                Page.UPGRADE: { "action": self.interaction.click_ocr, "args": ("培养", "right_bottom") },
             },
             Page.SORT: {
                 Page.MAIN: { "action": self.interaction.send_key, "args": ("esc",) },
@@ -28,11 +30,11 @@ class EchoTask(BaseTask):
             },
             Page.UPGRADE: {
                 Page.MAIN: { "action": self.interaction.send_key, "args": ("esc",) },
-                Page.TUNE: { "action": self.interaction.click, "args": (0.039, 0.278) },
+                Page.TUNE: { "action": self.interaction.click_img_template, "args": (Element.TUNE, (0, 0, 0.3, 0.5)) },
             },
             Page.TUNE: {
                 Page.MAIN: { "action": self.interaction.send_key, "args": ("esc",) },
-                Page.UPGRADE: { "action": self.interaction.click, "args": (0.039, 0.160) },
+                Page.UPGRADE: { "action": self.interaction.click_img_template, "args": (Element.UPGRADE, (0, 0, 0.3, 0.5)) },
             },
         }
     
@@ -53,7 +55,11 @@ class EchoTask(BaseTask):
         if len(ocr_pattern(screenshot.crop((0, 0, width * 0.2, height * 0.1)), "调谐")) > 0:
             return Page.TUNE
         
-        return Page.MAIN
+        if len(ocr_pattern(screenshot.crop((width * 0.8, 0, width, height * 0.1)), "简述")) > 0:
+            return Page.MAIN
+        
+        logger.critical("Unknown page")
+        raise Exception("Unknown page")
 
     def to_page(self, target: Page):
         time.sleep(0.5)

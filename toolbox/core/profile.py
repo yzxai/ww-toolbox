@@ -132,6 +132,7 @@ class EchoProfile:
         num_non_zero = sum(1 for key, value in self.__dict__.items() if value != 0 and key not in ["level", "name"])
         if num_non_zero != self.level // 5:
             logger.warning(f"Validation failed due to invalid number of non-zero entries: {num_non_zero} != {self.level // 5}")
+            logger.warning(f"Profile: {self}")
             return False
         
         # ensure all non-zero entries are valid
@@ -181,6 +182,16 @@ class EchoProfile:
 
             logger.debug(f"line: {line}")
 
+            if "声骸技能" in line:
+                break
+
+            if "+" in line:
+                level = self._extract_number(line)
+                if level is not None:
+                    self.level = round(level)
+                    lines_to_skip = 2 
+                continue
+
             if self.name == "" and self.level == 0:
                 matched_longest_name = ""
                 for name in echo_data.keys():
@@ -198,12 +209,6 @@ class EchoProfile:
                         if len(name) > len(matched_longest_name):
                             matched_longest_name = name
                             self.name = name
-            
-            if "+" in line:
-                level = self._extract_number(line)
-                if level is not None:
-                    self.level = round(level)
-                    lines_to_skip = 2 
                 continue
 
             if lines_to_skip > 0:

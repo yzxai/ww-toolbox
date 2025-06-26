@@ -6,7 +6,23 @@ import random
 from ctypes import windll
 from PIL import Image
 from toolbox.utils.logger import logger
-from toolbox.utils.ocr import ocr_pattern, match_single_object_akaze
+from toolbox.utils.ocr import ocr_pattern, match_single_object_template
+from toolbox.utils.generic import get_assets_dir
+from enum import Enum
+
+class Element(Enum):
+    COST1 = "cost1.png"
+    COST3 = "cost3.png"
+    COST4 = "cost4.png"
+    ECHO_FILTER = "echo_filter.png"
+    ECHO_SORT = "echo_sort.png"
+    SUIT_FILTER = "suit_filter.png"
+    TUNE = "tune.png"
+    UPGRADE = "upgrade.png"
+
+    def to_img(self) -> Image.Image:
+        path = get_assets_dir() / "imgs" / "game" / self.value
+        return Image.open(path)
 
 class Interaction:
     def __init__(self):
@@ -175,7 +191,7 @@ class Interaction:
         
         # Now send the standard click messages
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
-        time.sleep(0.1)
+        time.sleep(0.15)
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, position)
         time.sleep(0.1)
     
@@ -195,15 +211,22 @@ class Interaction:
 
         # Make the window think it's being activated.
         win32api.PostMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+        time.sleep(0.05)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_MOUSEMOVE, 0, win32api.MAKELONG(x, y))
 
         # For WM_MOUSEWHEEL, lParam needs to be screen coordinates.
         screen_coords = win32gui.ClientToScreen(self.game_hwnd, (x, y))
-        position = win32api.MAKELONG(screen_coords[0], screen_coords[1])
+        screen_position = win32api.MAKELONG(screen_coords[0], screen_coords[1])
         
+        # for press and release, it uses client coordinates.
+        client_position = win32api.MAKELONG(x, y)
+
         # Send the scroll messages
+        win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, client_position)
         w_param = win32api.MAKELONG(0, int(-delta * 120))
-        win32api.PostMessage(self.game_hwnd, win32con.WM_MOUSEWHEEL, w_param, position)
-        time.sleep(0.1)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_MOUSEWHEEL, w_param, screen_position)
+        win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, client_position)
+        time.sleep(0.05)
     
     def send_text(self, text: str):
         """
@@ -304,13 +327,14 @@ class Interaction:
             return
         
         logger.critical(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
+        screenshot.show()
         raise Exception(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
         
-    def click_img_template(self, template_img: Image.Image, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, debug: bool = False):
+    def click_img_template(self, target: Element, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, debug: bool = False):
         """
         Find a template image on the screen and click its center.
         Args:
-            template_img (Image.Image): The template image to search for.
+            target (Element): The template image to search for.
             region (tuple[float, float, float, float] | str, optional): The region to search in. Defaults to None (full screen).
             max_retries (int, optional): Number of retries if the image is not found. Defaults to 5.
             debug (bool, optional): Whether to display matching visualization. Defaults to False.
@@ -330,7 +354,7 @@ class Interaction:
                 time.sleep(1)
                 continue
 
-            coords = match_single_object_akaze(template_img, screenshot, debug=debug)
+            coords = match_single_object_template(target.to_img(), screenshot, debug=debug)
 
             if coords is None:
                 logger.warning(f'Template not found. Retrying... ({i+1}/{max_retries})')
@@ -350,7 +374,8 @@ class Interaction:
             
             return
         
-        logger.critical(f'Failed to find template image after {max_retries} retries.')
-        raise Exception('Failed to find template image.')
+        logger.critical(f'Failed to find target after {max_retries} retries.')
+        screenshot.show()
+        raise Exception('Failed to find target.')
         
         
