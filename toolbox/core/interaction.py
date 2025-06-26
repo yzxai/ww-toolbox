@@ -6,7 +6,7 @@ import random
 from ctypes import windll
 from PIL import Image
 from toolbox.utils.logger import logger
-from toolbox.utils.ocr import ocr_pattern
+from toolbox.utils.ocr import ocr_pattern, match_single_object_akaze
 
 class Interaction:
     def __init__(self):
@@ -182,6 +182,7 @@ class Interaction:
     def scroll(self, x_ratio: float, y_ratio: float, delta: int):
         """
         Scroll the game window at the specified coordinates.
+        This method works even if the window is in the background or obscured.
         Args:
             x_ratio (float): The x coordinate of the scroll.
             y_ratio (float): The y coordinate of the scroll.
@@ -192,15 +193,17 @@ class Interaction:
         width, height = self.get_app_window_size()
         x, y = int(width * x_ratio), int(height * y_ratio)
 
-        # Get the coordinates of the left top corner of the window and add to (x, y)
-        rect = win32gui.GetWindowRect(self.game_hwnd)
-        left, top = rect[0], rect[1]
-        win32api.SetCursorPos((x + left, y + top))
+        # Make the window think it's being activated.
+        win32api.PostMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+
+        # For WM_MOUSEWHEEL, lParam needs to be screen coordinates.
+        screen_coords = win32gui.ClientToScreen(self.game_hwnd, (x, y))
+        position = win32api.MAKELONG(screen_coords[0], screen_coords[1])
         
         # Send the scroll messages
-        position = win32api.MAKELONG(x, y)
-        delta = win32api.MAKELONG(0, int(-delta * 120))
-        win32api.PostMessage(self.game_hwnd, win32con.WM_MOUSEWHEEL, delta, position)
+        w_param = win32api.MAKELONG(0, int(-delta * 120))
+        win32api.PostMessage(self.game_hwnd, win32con.WM_MOUSEWHEEL, w_param, position)
+        time.sleep(0.1)
     
     def send_text(self, text: str):
         """
@@ -302,5 +305,52 @@ class Interaction:
         
         logger.critical(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
         raise Exception(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
+        
+    def click_img_template(self, template_img: Image.Image, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, debug: bool = False):
+        """
+        Find a template image on the screen and click its center.
+        Args:
+            template_img (Image.Image): The template image to search for.
+            region (tuple[float, float, float, float] | str, optional): The region to search in. Defaults to None (full screen).
+            max_retries (int, optional): Number of retries if the image is not found. Defaults to 5.
+            debug (bool, optional): Whether to display matching visualization. Defaults to False.
+        """
+        self.ensure_connected()
+
+        region_coords = self._recognize_region(region)
+
+        for i in range(max_retries):
+            if region_coords is None:
+                screenshot = self.screenshot()
+            else:
+                screenshot = self.screenshot_region(*region_coords)
+            
+            if screenshot is None:
+                logger.warning("Failed to get screenshot, retrying...")
+                time.sleep(1)
+                continue
+
+            coords = match_single_object_akaze(template_img, screenshot, debug=debug)
+
+            if coords is None:
+                logger.warning(f'Template not found. Retrying... ({i+1}/{max_retries})')
+                time.sleep(1)
+                continue
+
+            center_x, center_y = coords
+            
+            width, height = self.get_app_window_size()
+            x_ratio = center_x / width
+            y_ratio = center_y / height
+            
+            if region_coords is not None:
+                self.click(x_ratio + region_coords[0], y_ratio + region_coords[1])
+            else:
+                self.click(x_ratio, y_ratio)
+            
+            return
+        
+        logger.critical(f'Failed to find template image after {max_retries} retries.')
+        raise Exception('Failed to find template image.')
         
         
