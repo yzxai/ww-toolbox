@@ -191,7 +191,7 @@ class Interaction:
         
         # Now send the standard click messages
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
-        time.sleep(0.15)
+        time.sleep(0.05)
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, position)
         time.sleep(0.1)
     

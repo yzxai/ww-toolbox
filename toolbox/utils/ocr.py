@@ -83,7 +83,7 @@ def ocr_pattern(image: Image.Image, pattern: str) -> list[OCRResult]:
 def match_single_object_template(
     query_img: Image.Image, 
     target_img: Image.Image, 
-    match_threshold=0.5, 
+    match_threshold=0.3, 
     scale_range=(0.8, 1.2), 
     scale_steps=5, 
     debug=False
@@ -103,46 +103,47 @@ def match_single_object_template(
     Returns:
         tuple[int, int] | None: Center coordinates (x, y) of the matched object or None if not found.
     """
-    query_np = np.array(query_img.convert('L'))
-    target_np = np.array(target_img.convert('L'))
-    
-    query_edges = cv2.Canny(query_np, 50, 200)
+    def preprocess_edges(gray: np.ndarray) -> np.ndarray:
+        # Add a median blur to combat salt-and-pepper noise. A 5x5 kernel is used for robustness.
+        blurred = cv2.medianBlur(gray, 5)
+        equalized = cv2.equalizeHist(blurred)
+        edges = cv2.Canny(equalized, 50, 150)
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=1)
+        return edges
+
+    query_gray = np.array(query_img.convert('L'))
+    target_gray = np.array(target_img.convert('L'))
+
+    query_edges = preprocess_edges(query_gray)
     if np.sum(query_edges) == 0:
         return None
-    
-    tH, tW = query_edges.shape
 
-    # Keep track of the best match found across all scales.
+    tH, tW = query_edges.shape
     best_match = None
 
-    # Loop over the defined scales.
     for scale in np.linspace(scale_range[0], scale_range[1], scale_steps)[::-1]:
-        # Resize the target image for the current scale and compute its edge map.
-        resized_target = cv2.resize(target_np, (int(target_np.shape[1] * scale), int(target_np.shape[0] * scale)))
-        
-        # If the resized image is smaller than the template, we can stop.
+        resized_target = cv2.resize(
+            target_gray,
+            (int(target_gray.shape[1] * scale), int(target_gray.shape[0] * scale)),
+            interpolation=cv2.INTER_LINEAR
+        )
+
         if resized_target.shape[0] < tH or resized_target.shape[1] < tW:
             break
 
-        target_edges = cv2.Canny(resized_target, 50, 200)
-
-        # Perform template matching.
+        target_edges = preprocess_edges(resized_target)
         result = cv2.matchTemplate(target_edges, query_edges, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-        # If we have found a new best match, update the tracking variable.
         if best_match is None or max_val > best_match[0]:
             best_match = (max_val, max_loc, scale)
 
-    # Check if the best match meets the threshold.
     if best_match and best_match[0] >= match_threshold:
         max_val, max_loc, scale = best_match
-        
-        # Adjust coordinates back to the original image size.
         top_left_unscaled = (int(max_loc[0] / scale), int(max_loc[1] / scale))
         w_unscaled = int(tW / scale)
         h_unscaled = int(tH / scale)
-
         center_x = top_left_unscaled[0] + w_unscaled // 2
         center_y = top_left_unscaled[1] + h_unscaled // 2
 
@@ -333,6 +334,39 @@ def compute_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> f
     union = area_a + area_b - inter_area
     return inter_area / union if union > 0 else 0
 
+def _change_hue_cv2(image: Image.Image, hue_shift: int) -> Image.Image:
+    """
+    Shifts the hue of an image using OpenCV. For testing purposes.
+    hue_shift: angle in degrees to shift hue (0-180 for OpenCV).
+    """
+    rgb_img = np.array(image.convert('RGB'))
+    hsv_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2HSV)
+    # The H channel in OpenCV is in the range [0, 179]
+    hsv_img[..., 0] = (hsv_img[..., 0].astype(int) + hue_shift) % 180
+    new_rgb_img = cv2.cvtColor(hsv_img, cv2.COLOR_HSV2RGB)
+    return Image.fromarray(new_rgb_img)
+
+def _add_salt_and_pepper_noise(image: Image.Image, amount=0.05) -> Image.Image:
+    """
+    Adds salt and pepper noise to a PIL image. For testing purposes.
+    """
+    img_np = np.array(image.convert('RGB'))
+    h, w, _ = img_np.shape
+    
+    # Salt noise (white pixels)
+    num_salt = int(amount * h * w * 0.5)
+    ys_salt = np.random.randint(0, h, num_salt)
+    xs_salt = np.random.randint(0, w, num_salt)
+    img_np[ys_salt, xs_salt, :] = 255
+
+    # Pepper noise (black pixels)
+    num_pepper = int(amount * h * w * 0.5)
+    ys_pepper = np.random.randint(0, h, num_pepper)
+    xs_pepper = np.random.randint(0, w, num_pepper)
+    img_np[ys_pepper, xs_pepper, :] = 0
+    
+    return Image.fromarray(img_np)
+
 if __name__ == "__main__":
     setup_ocr()
     img = Image.open("tests/test-level.png")
@@ -361,6 +395,18 @@ if __name__ == "__main__":
         print("Running template matching test...")
         coords = match_single_object_template(template_img_orig, match_img_orig, debug=True)
         print(f"  Result: {coords}")
+
+        # --- Hue shift test ---
+        print("\nRunning template matching test with hue shift (should still work)...")
+        hue_shifted_img = _change_hue_cv2(match_img_orig, 90) # 90 degree shift
+        coords_hue = match_single_object_template(template_img_orig, hue_shifted_img, debug=True)
+        print(f"  Result with hue shift: {coords_hue}")
+
+        # --- Noise test ---
+        print("\nRunning template matching test with noise...")
+        noisy_img = _add_salt_and_pepper_noise(match_img_orig, amount=0.02)
+        coords_noise = match_single_object_template(template_img_orig, noisy_img, debug=True)
+        print(f"  Result with noise: {coords_noise}")
             
     except FileNotFoundError:
         print("\nSkipping template matching tests: 'tests/test-template.png' or 'tests/test-match.png' not found.")

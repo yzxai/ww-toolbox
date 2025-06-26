@@ -20,7 +20,7 @@ class EchoPunch(EchoTask):
             logger.warning("Not enough materials") 
             return profile
 
-        self.interaction.click_ocr("强化", region=(0, 0.7, 0.5, 1))
+        self.interaction.click_ocr("强化", region=(0, 0.8, 0.5, 1))
         time.sleep(0.8)
 
         screenshot = self.interaction.screenshot_region(0.5, 0.6, 1, 1)
@@ -41,7 +41,6 @@ class EchoPunch(EchoTask):
                 level = int(result[0].text)
                 if (profile.level + 10) // 5 * 5 >= level > profile.level:
                     logger.info(f"Echo level after upgrade: {level}")
-                    self.interaction.send_key("esc")
                     captured = True
                     break
                 

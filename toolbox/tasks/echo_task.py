@@ -62,6 +62,7 @@ class EchoTask(BaseTask):
         raise Exception("Unknown page")
 
     def to_page(self, target: Page):
+        logger.info(f"To page: {target}")
         time.sleep(0.5)
         current_page = self.current_page()
 

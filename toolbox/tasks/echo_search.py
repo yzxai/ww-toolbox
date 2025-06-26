@@ -16,20 +16,6 @@ class EchoSearch(EchoTask):
         self.interaction.ensure_connected()
         self.to_page(Page.MAIN)
 
-        for i in range(10):
-            self.interaction.scroll(0.192, 0.244, -30)
-            time.sleep(0.1)
-
-        time.sleep(0.5)
-        width, height = self.interaction.get_app_window_size()
-        left_top = (0.092, 0.231)
-        right_bottom = (0.294, 0.835) 
-        screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
-        
-        boxes = detect_and_merge_rectangles_pil(screenshot)
-        
-        num_checked = 0
-
         def check_profile_matched() -> EchoProfile:
             while True:
                 if work_state["cancel_requested"]: return None
@@ -49,6 +35,29 @@ class EchoSearch(EchoTask):
 
                 time.sleep(1)
             return None
+        
+        curr_profile = check_profile_matched()
+        if curr_profile is not None:
+            return curr_profile
+        
+        profile_img = self.interaction.screenshot_region(0.7356, 0.1264, 0.952, 0.458)
+        curr_profile = EchoProfile().from_image(profile_img)
+
+        if curr_profile.level <= profile.level:
+            for i in range(10):
+                self.interaction.scroll(0.192, 0.244, -30)
+                time.sleep(0.1)
+
+            time.sleep(0.5)
+
+        width, height = self.interaction.get_app_window_size()
+        left_top = (0.092, 0.231)
+        right_bottom = (0.294, 0.835) 
+        screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
+        
+        boxes = detect_and_merge_rectangles_pil(screenshot)
+        
+        num_checked = 0
 
         for box in boxes:
             if work_state["cancel_requested"]: return None
