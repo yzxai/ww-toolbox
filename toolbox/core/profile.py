@@ -125,7 +125,10 @@ class EchoProfile:
             return False
         
         if self.name not in echo_data.keys():
-            logger.warning(f"Validation failed due to invalid name: {self.name}")
+            if self.name == "":
+                logger.warning("Validation failed at name identification")
+            else:
+                logger.warning(f"Validation failed due to invalid name: {self.name}")
             return False
         
         # check the number of non-zero entries

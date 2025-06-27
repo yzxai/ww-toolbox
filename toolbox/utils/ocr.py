@@ -74,8 +74,7 @@ def ocr_pattern(image: Image.Image, pattern: str) -> list[OCRResult]:
             if re.search(pattern, text):
                 matched_text = re.search(pattern, text).group(0)
                 results.append(OCRResult(matched_text, (box[0][0], box[0][1], box[2][0], box[2][1]), score))
-    except Exception as e:
-        logger.warning(f"Error in ocr_pattern: {e}")
+    except Exception:
         return []
 
     return results

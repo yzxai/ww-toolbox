@@ -13,15 +13,22 @@ class EchoPunch(EchoTask):
         self.interaction.ensure_connected()
         self.to_page(Page.UPGRADE)
         self.interaction.click_ocr("阶段放入", region=(0, 0.6, 0.5, 1))
-        time.sleep(0.8)
+        time.sleep(1)
 
         screenshot = self.interaction.screenshot_region(0.466, 0.18, 0.534, 0.212)
         if len(ocr_pattern(screenshot, "不足")) > 0:
-            logger.warning("Not enough materials") 
-            return profile
+            logger.critical("Not enough materials") 
+            raise Exception("Not enough materials")
 
-        self.interaction.click_ocr("强化", region=(0, 0.8, 0.5, 1))
-        time.sleep(0.8)
+        while True:
+            self.interaction.click_ocr("强化", region=(0, 0.8, 0.5, 1))
+
+            time.sleep(0.8)
+            validation_img = self.interaction.screenshot_region(0, 0.8, 0.5, 1)
+            if len(ocr_pattern(validation_img, "强化")) == 0:
+                break
+
+            logger.warning("Failed to click the upgrade button, retrying...")
 
         screenshot = self.interaction.screenshot_region(0.5, 0.6, 1, 1)
         overflow = False
@@ -31,6 +38,7 @@ class EchoPunch(EchoTask):
             overflow = True
             time.sleep(0.5)
 
+        time.sleep(1)
         captured = False
         for _ in range(10):
             if work_state["cancel_requested"]: return None

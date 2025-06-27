@@ -23,8 +23,15 @@ class EchoPageSelector(EchoTask):
 
         self.to_page(Page.MAIN)
         time.sleep(0.3)
-        x_offset = 0.168 if filter.cost == 1 else 0.220 if filter.cost == 3 else 0.272
-        self.interaction.click(x_offset, 0.053)
+
+        for _ in range(3):
+            match filter.cost:
+                case 1:
+                    self.interaction.click_ocr("1", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
+                case 3:
+                    self.interaction.click_ocr("3", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
+                case 4:
+                    self.interaction.click_ocr("4", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
 
         # 1. filter the echos by name 
         time.sleep(0.3)
@@ -51,8 +58,15 @@ class EchoPageSelector(EchoTask):
             _screen_shot = self.interaction.screenshot_region(0.118, 0.102, 0.201, 0.131)
             if len(ocr_pattern(_screen_shot, filter.suit)) == 0:
                 time.sleep(0.2)
-                self.interaction.click_img_template(Element.SUIT_FILTER, region="left_top")
-                time.sleep(0.3)
+                while True:
+                    self.interaction.click_img_template(Element.SUIT_FILTER, region="left_top")
+                    time.sleep(0.5)
+                    validation_img = self.interaction.screenshot_region(0.875, 0.180, 0.892, 0.210)
+                    if len(ocr_pattern(validation_img, "z")) == 0:
+                        break
+
+                    logger.warning("Failed to click the suit filter, retrying...")
+                
                 self.interaction.click_ocr(filter.suit, region=(0.117, 0.201, 0.213, 0.700))
         
         # 3. filter the echos by main entry 

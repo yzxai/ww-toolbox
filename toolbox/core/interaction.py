@@ -154,7 +154,7 @@ class Interaction:
         x_0, y_0, x_1, y_1 = int(width * x_0), int(height * y_0), int(width * x_1), int(height * y_1)
         return screenshot.crop((x_0, y_0, x_1, y_1))
     
-    def click(self, x_ratio: float, y_ratio: float, rand: bool = True):
+    def click(self, x_ratio: float, y_ratio: float, rand: bool = True, press_time: float = 0.05):
         """
         Click on the game window at the specified coordinates.
         This method works even if the window is in the background or obscured.
@@ -191,7 +191,7 @@ class Interaction:
         
         # Now send the standard click messages
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
-        time.sleep(0.05)
+        time.sleep(press_time)
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONUP, 0, position)
         time.sleep(0.1)
     
@@ -288,7 +288,7 @@ class Interaction:
         
         return region
 
-    def click_ocr(self, pattern: str, region: tuple[float, float, float, float] | str = None, max_retries: int = 5):
+    def click_ocr(self, pattern: str, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, press_time: float = 0.05):
         """
         Click on the game window at the specified coordinates.
         Args:
@@ -320,9 +320,9 @@ class Interaction:
             x, y = (result.box[0] + result.box[2]) / 2 / width, (result.box[1] + result.box[3]) / 2 / height
 
             if region is not None:
-                self.click(x + region[0], y + region[1])
+                self.click(x + region[0], y + region[1], rand=False, press_time=press_time)
             else:
-                self.click(x, y)
+                self.click(x, y, rand=False, press_time=press_time)
 
             return
         
