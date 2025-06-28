@@ -327,7 +327,7 @@ class Interaction:
             return
         
         logger.critical(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
-        screenshot.show()
+        # screenshot.show()
         raise Exception(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
         
     def click_img_template(self, target: Element, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, debug: bool = False):

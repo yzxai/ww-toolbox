@@ -21,6 +21,7 @@ class EchoPunch(EchoTask):
             raise Exception("Not enough materials")
 
         while True:
+            if work_state["cancel_requested"]: return None
             self.interaction.click_ocr("强化", region=(0, 0.8, 0.5, 1))
 
             time.sleep(0.8)
@@ -58,7 +59,7 @@ class EchoPunch(EchoTask):
         
         if not captured:
             logger.critical("Failed to capture the level after 10 retries, returning...")
-            screenshot.show()
+            # screenshot.show()
             raise Exception("Failed to capture the level after 10 retries")
 
         self.interaction.send_key("esc")

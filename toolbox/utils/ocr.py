@@ -41,11 +41,15 @@ def ocr(image: Image.Image, split: str = ' ') -> str:
 
     predicted = ""
     last_right_bottom_y = 0
-    for text, box in zip(texts, boxes):
-        if box[0][1] >= last_right_bottom_y - 2:
-            predicted += "\n"
-        predicted += text + split
-        last_right_bottom_y = box[2][1]
+
+    try:
+        for text, box in zip(texts, boxes):
+            if box[0][1] >= last_right_bottom_y - 2:
+                predicted += "\n"
+            predicted += text + split
+            last_right_bottom_y = box[2][1]
+    except Exception:
+        return ""
 
     return predicted.strip()
 

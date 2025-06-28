@@ -985,12 +985,14 @@ async function initializePage1() {
             }
         }
     
+        const maxProbEl = document.getElementById('echo-detail-max-prob');
         const probEl = document.getElementById('echo-detail-prob');
         const expEl = document.getElementById('echo-detail-exp');
         const scoreEl = document.getElementById('echo-detail-score');
         const expectedScoreEl = document.getElementById('echo-detail-expected-score');
     
         if (analysis) {
+            maxProbEl.textContent = `${(analysis.prob_above_threshold * 100).toFixed(2)}%`;
             probEl.textContent = `${(analysis.prob_above_threshold_with_discard * 100).toFixed(2)}%`;
             const wastedExp = analysis.expected_total_wasted_exp;
             if (wastedExp === -1 || wastedExp > 1e9) {
@@ -1001,6 +1003,7 @@ async function initializePage1() {
             scoreEl.textContent = analysis.score.toFixed(2);
             expectedScoreEl.textContent = analysis.expected_score.toFixed(2);
         } else {
+            maxProbEl.textContent = 'N/A';
             probEl.textContent = 'N/A';
             expEl.textContent = 'N/A';
             scoreEl.textContent = 'N/A';
@@ -1192,28 +1195,22 @@ async function initializePage1() {
         try {
             while(isWorking) {
                 let bestEchoIndex = -1;
-                let maxProb = -1.0;
+                let minExp = 1e9;
     
                 scannedProfiles.forEach((item, index) => {
                     if (item.profile.level < 25 && item.analysis && !isEchoDiscarded(item)) {
-                        const currentProb = item.analysis.prob_above_threshold_with_discard;
-                        if (currentProb > maxProb) {
-                            maxProb = currentProb;
+                        const currentExp = item.analysis.expected_total_wasted_exp;
+                        if (currentExp < minExp && currentExp >= 0) {
+                            minExp = currentExp;
                             bestEchoIndex = index;
                         }
                     }
                 });
     
-                const probResultText = document.getElementById('scheduler-prob').textContent;
-                let breakevenProb = -1.0;
-                if (probResultText.includes('%')) {
-                    breakevenProb = parseFloat(probResultText) / 100.0;
-                }
-    
                 let profileToSend = {};
                 let upgradedIndex = -1;
     
-                if (bestEchoIndex !== -1 && maxProb > breakevenProb) {
+                if (bestEchoIndex !== -1) {
                     profileToSend = scannedProfiles[bestEchoIndex].profile;
                     upgradedIndex = bestEchoIndex;
                 }
@@ -1300,9 +1297,13 @@ async function initializePage1() {
         if (!item.analysis || item.profile.level >= 25) {
             return false;
         }
+
+        if (item.analysis.expected_total_wasted_exp < 0) {
+            return false;
+        }
     
         const level = item.profile.level;
-        const prob = item.analysis.prob_above_threshold_with_discard;
+        const prob = item.analysis.prob_above_threshold;
         const scheduler = userSelection.discard_scheduler;
     
         let threshold;

@@ -4,6 +4,7 @@ const http = require('http');
 const { spawn, exec } = require('child_process');
 const kill = require('tree-kill');
 const isAdmin = require('is-admin');
+const sudo = require('sudo-prompt');
 
 let mainWindow;
 let pythonProcess;
@@ -124,14 +125,15 @@ app.whenReady().then(async () => {
 
   const isElevated = await isAdmin();
   if (!isElevated) {
-    const execPath = process.execPath;
-    const appPath = app.getAppPath();
-    exec(`powershell -Command "Start-Process -FilePath '${execPath}' -ArgumentList '${appPath}' -Verb RunAs"`, (err) => {
-      if (err) {
-        console.error('Failed to relaunch with admin rights:', err);
+    const options = {
+      name: 'Wuthering Waves Toolbox'
+    };
+    const command = '"' + process.execPath + '" ' + process.argv.slice(1).join(' ');
+    sudo.exec(command, options,
+      (error, stdout, stderr) => {
+        app.quit();
       }
-      app.quit();
-    });
+    );
     return;
   }
 
