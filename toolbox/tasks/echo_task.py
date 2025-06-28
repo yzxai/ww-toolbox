@@ -18,8 +18,8 @@ class EchoTask(BaseTask):
         # setup trasmission graph between pages
         self.graph = {
             Page.MAIN: {
-                Page.SORT: { "action": self.interaction.click_img_template, "args": (Element.ECHO_SORT, (0.05, 0.9, 0.3, 1)) },
-                Page.FILTER: { "action": self.interaction.click_img_template, "args": (Element.ECHO_FILTER, (0.05, 0.9, 0.3, 1)) },
+                Page.SORT: { "action": self.interaction.click_img_template, "args": (Element.ECHO_SORT, (0.085, 0.9, 0.3, 1)) },
+                Page.FILTER: { "action": self.interaction.click_img_template, "args": (Element.ECHO_FILTER, (0.085, 0.9, 0.3, 1)) },
                 Page.UPGRADE: { "action": self.interaction.click_ocr, "args": ("培养", "right_bottom") },
             },
             Page.SORT: {

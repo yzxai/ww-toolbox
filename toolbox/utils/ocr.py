@@ -87,8 +87,8 @@ def match_single_object_template(
     query_img: Image.Image, 
     target_img: Image.Image, 
     match_threshold=0.3, 
-    scale_range=(0.8, 1.2), 
-    scale_steps=5, 
+    scale_range=(0.5, 2.0), 
+    scale_steps=30, 
     debug=False
 ) -> tuple[int, int] | None:
     """
@@ -167,7 +167,7 @@ def match_single_object_template(
 def _detect_rectangles_raw(
     pil_image: Image.Image,
     aspect_ratio_range=(0.8, 1.2),
-    area_range=(300, 1e3)
+    area_range=(200, 1e3)
 ) -> list[tuple[int, int, int, int]]:
     """Detects raw rectangular regions from a PIL image without merging."""
     image = np.array(pil_image)
@@ -179,7 +179,7 @@ def _detect_rectangles_raw(
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blur, 50, 150)
+    edges = cv2.Canny(blur, 100, 150)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     rects = []
@@ -218,7 +218,7 @@ def detect_and_merge_rectangles_pil(
     aspect_ratio_range=(0.8, 1.2),
     area_range=(300, 1e3),
     iou_threshold=0.2,
-    num_perturbations=10,
+    num_perturbations=30,
     debug=False
 ) -> list[tuple[int, int, int, int]]:
     """
@@ -236,18 +236,24 @@ def detect_and_merge_rectangles_pil(
     Returns:
         list[tuple[int, int, int, int]]: A list of merged rectangles as (x, y, w, h).
     """
+    # Scale image to target width 512 while maintaining aspect ratio
+    orig_width, orig_height = pil_image.size
+    scale = 512 / orig_width
+    target_height = int(orig_height * scale)
+    scaled_image = pil_image.resize((512, target_height), Image.Resampling.BICUBIC)
+
     all_rects = []
 
     # Original image
-    all_rects.extend(_detect_rectangles_raw(pil_image, aspect_ratio_range, area_range))
+    all_rects.extend(_detect_rectangles_raw(scaled_image, aspect_ratio_range, area_range))
 
     # Perturbed images
     for _ in range(num_perturbations):
-        perturbed_image = pil_image.copy()
+        perturbed_image = scaled_image.copy()
         enhancers = [
             (ImageEnhance.Brightness, random.uniform(0.9, 1.1)),
             (ImageEnhance.Contrast, random.uniform(0.9, 1.1)),
-            (ImageEnhance.Sharpness, random.uniform(0.9, 1.1))
+            (ImageEnhance.Sharpness, random.uniform(1.1, 1.3)),
         ]
         random.shuffle(enhancers)
         
@@ -268,6 +274,11 @@ def detect_and_merge_rectangles_pil(
                 i -= 1
         else:
             i += 1
+
+    # Scale coordinates back to original image size
+    scale_back = orig_width / 512
+    merged = [(round(x * scale_back), round(y * scale_back), 
+              round(w * scale_back), round(h * scale_back)) for x, y, w, h in merged]
 
     if debug:
         vis_image = np.array(pil_image.convert('RGB'))

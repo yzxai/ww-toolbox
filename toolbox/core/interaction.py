@@ -19,6 +19,7 @@ class Element(Enum):
     SUIT_FILTER = "suit_filter.png"
     TUNE = "tune.png"
     UPGRADE = "upgrade.png"
+    TRASH = "trash.png"
 
     def to_img(self) -> Image.Image:
         path = get_assets_dir() / "imgs" / "game" / self.value
@@ -76,7 +77,7 @@ class Interaction:
             tuple[int, int]: The width and height of the game window.
         """
         self.ensure_connected()
-        left, top, right, bottom = win32gui.GetWindowRect(self.game_hwnd)
+        left, top, right, bottom = win32gui.GetClientRect(self.game_hwnd)
         return right - left, bottom - top
     
     def get_scale_factor(self) -> float:
@@ -146,10 +147,6 @@ class Interaction:
         if screenshot is None:
             return None
 
-        if not 0 <= x_0 <= 1 or not 0 <= y_0 <= 1 or not 0 <= x_1 <= 1 or not 0 <= y_1 <= 1:
-            logger.error(f'Invalid coordinates: ({x_0}, {y_0}, {x_1}, {y_1}). Ignoring...')
-            return None
-
         width, height = self.get_app_window_size()
         x_0, y_0, x_1, y_1 = int(width * x_0), int(height * y_0), int(width * x_1), int(height * y_1)
         return screenshot.crop((x_0, y_0, x_1, y_1))
@@ -183,11 +180,6 @@ class Interaction:
 
         # Make the window think it's being activated.
         win32api.PostMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
-
-        # # Get the coordinates of the left top corner of the window and add to (x, y)
-        # rect = win32gui.GetWindowRect(self.game_hwnd)
-        # left, top = rect[0], rect[1]
-        # win32api.SetCursorPos((x + left, y + top))
         
         # Now send the standard click messages
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
@@ -288,7 +280,13 @@ class Interaction:
         
         return region
 
-    def click_ocr(self, pattern: str, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, press_time: float = 0.05):
+    def click_ocr(
+        self, 
+        pattern: str, 
+        region: tuple[float, float, float, float] | str = None, 
+        max_retries: int = 5, 
+        press_time: float = 0.05
+    ):
         """
         Click on the game window at the specified coordinates.
         Args:
@@ -330,7 +328,14 @@ class Interaction:
         # screenshot.show()
         raise Exception(f'Failed to click on pattern: {pattern} after {max_retries} retries.')
         
-    def click_img_template(self, target: Element, region: tuple[float, float, float, float] | str = None, max_retries: int = 5, debug: bool = False):
+    def click_img_template(
+        self, 
+        target: Element, 
+        region: tuple[float, float, float, float] | str = None, 
+        max_retries: int = 5, 
+        debug: bool = False, 
+        tolerant: bool = False
+    ):
         """
         Find a template image on the screen and click its center.
         Args:
@@ -354,10 +359,12 @@ class Interaction:
                 time.sleep(1)
                 continue
 
+            logger.info(f"Matching template: {target.value}")
             coords = match_single_object_template(target.to_img(), screenshot, debug=debug)
 
             if coords is None:
-                logger.warning(f'Template not found. Retrying... ({i+1}/{max_retries})')
+                if not tolerant:
+                    logger.warning(f'Template not found. Retrying... ({i+1}/{max_retries})')
                 time.sleep(1)
                 continue
 
@@ -374,8 +381,9 @@ class Interaction:
             
             return
         
-        logger.critical(f'Failed to find target after {max_retries} retries.')
-        screenshot.show()
-        raise Exception('Failed to find target.')
+        if not tolerant:
+            logger.critical(f'Failed to find target after {max_retries} retries.')
+            # screenshot.show()
+            raise Exception('Failed to find target.')
         
         

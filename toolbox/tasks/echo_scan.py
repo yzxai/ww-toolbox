@@ -31,7 +31,7 @@ class EchoScan(EchoTask):
         left_top = (0.092, 0.231)
         right_bottom = (0.294, 0.835) 
         screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
-        
+
         boxes = detect_and_merge_rectangles_pil(screenshot)
 
         for box in boxes:
