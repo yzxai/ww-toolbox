@@ -22,15 +22,6 @@ def get_timestamp() -> str:
 def is_admin() -> bool:
     return ctypes.windll.shell32.IsUserAnAdmin() != 0
 
-def run_as_admin():
-    if is_admin():
-        return
-    script = os.path.abspath(sys.argv[0])
-    params = " ".join([f'"{arg}"' for arg in sys.argv[1:]])
-    try:
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, f'"{script}" {params}', None, 1
-        )
-    except Exception as e:
-        print(f'Failed to run as admin: {e}')
-    sys.exit(0)
+def check_privilege():
+    if not is_admin():
+        print("Backend is not granted with admin privilege.")

@@ -1,10 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
+const { spawn } = require('child_process');
 const path = require("path");
 const http = require('http');
-const { spawn, exec } = require('child_process');
 const kill = require('tree-kill');
-const isAdmin = require('is-admin');
-const sudo = require('sudo-prompt');
 
 let mainWindow;
 let pythonProcess;
@@ -122,20 +120,6 @@ app.whenReady().then(async () => {
       assetsPathInProd: app.isPackaged ? path.join(process.resourcesPath, 'assets') : ''
     };
   });
-
-  const isElevated = await isAdmin();
-  if (!isElevated) {
-    const options = {
-      name: 'Wuthering Waves Toolbox'
-    };
-    const command = '"' + process.execPath + '" ' + process.argv.slice(1).join(' ');
-    sudo.exec(command, options,
-      (error, stdout, stderr) => {
-        app.quit();
-      }
-    );
-    return;
-  }
 
   initializeApp();
 

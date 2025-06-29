@@ -1,8 +1,8 @@
 from toolbox.core.profile import EchoProfile
-from toolbox.utils.generic import run_as_admin
+from toolbox.utils.generic import check_privilege
 from toolbox.utils.ocr import setup_ocr
 
-run_as_admin()
+check_privilege()
 setup_ocr()
 
 from toolbox.tasks.echo_punch import EchoPunch

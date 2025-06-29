@@ -56,7 +56,13 @@ class EchoPageSelector(EchoTask):
 
             # 2.1 check if the target suit is already selected
             _screen_shot = self.interaction.screenshot_region(0.118, 0.102, 0.201, 0.131)
-            if len(ocr_pattern(_screen_shot, filter.suit)) == 0:
+            rare_chars = ['幽', '匿', '帷', '逝', '燎', '祛']
+
+            pattern = filter.suit
+            for rare_char in rare_chars:
+                pattern = pattern.replace(rare_char, ".?")
+
+            if len(ocr_pattern(_screen_shot, pattern)) == 0:
                 time.sleep(0.2)
                 while True:
                     self.interaction.click_img_template(Element.SUIT_FILTER, region="left_top")
@@ -67,7 +73,7 @@ class EchoPageSelector(EchoTask):
 
                     logger.warning("Failed to click the suit filter, retrying...")
                 
-                self.interaction.click_ocr(filter.suit, region=(0.117, 0.201, 0.213, 0.700))
+                self.interaction.click_ocr(pattern, region=(0.117, 0.201, 0.213, 0.700))
         
         # 3. filter the echos by main entry 
         if filter.main_entry != "":
