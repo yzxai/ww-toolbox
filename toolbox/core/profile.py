@@ -279,12 +279,35 @@ class EchoProfile:
     def prob_above_score(self, coef: 'EntryCoef', threshold: float) -> float:
         return profile_cpp.prob_above_score(self.to_cpp(), coef.to_cpp(), threshold, stat_data)
 
-    def get_expected_wasted_exp(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> float:
-        return profile_cpp.get_expected_wasted_exp(self.to_cpp(), coef.to_cpp(), score_thres, scheduler.to_cpp(), stat_data)
-    
-    def prob_above_threshold_with_discard(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> float:
-        return profile_cpp.prob_above_threshold_with_discard(self.to_cpp(), coef.to_cpp(), score_thres, scheduler.to_cpp(), stat_data)
-    
+    def get_statistics(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> tuple[float, float, float]:
+        """Return statistics about current profile under the given scheduler.
+
+        The underlying C++ implementation now returns a struct (pybind11 wrapped)
+        with three attributes:
+
+            prob_above_threshold_with_discard : float
+            expected_wasted_exp             : float
+            expected_wasted_tuner           : float
+
+        We convert it to a python tuple so that the existing downstream
+        code (e.g. api.get_analysis) continues to work without change.
+        """
+
+        # Call the updated C++ function which returns a Result struct
+        res = profile_cpp.get_statistics(
+            self.to_cpp(),
+            coef.to_cpp(),
+            score_thres,
+            scheduler.to_cpp(),
+            stat_data,
+        )
+
+        # Unpack the struct to a plain python tuple for backwards-compatibility
+        return (
+            float(res.prob_above_threshold_with_discard),
+            float(res.expected_wasted_exp),
+            float(res.expected_wasted_tuner),
+        )
 
 def test():
     image = Image.open("test.png")
@@ -311,9 +334,11 @@ def test():
     print(f"probability to get at least {threshold_score} score: {init_profile.prob_above_score(coef, threshold_score)}")
 
     scheduler = DiscardScheduler(level_5_9=0.1119, level_10_14=0.1119, level_15_19=0.1119, level_20_24=0.1119)
-    expected_wasted_exp = init_profile.get_expected_wasted_exp(coef, threshold_score, scheduler)
+    prob_above_threshold, expected_wasted_exp, expected_wasted_tuner = init_profile.get_statistics(coef, threshold_score, scheduler)
     print(f"expected wasted exp: {expected_wasted_exp}")
-    prob_above_threshold = init_profile.prob_above_threshold_with_discard(coef, threshold_score, scheduler)
+    print(f"expected wasted tuner: {expected_wasted_tuner}")
     print(f"probability to get at least {threshold_score} score with discard: {prob_above_threshold}")
 
-    print(f"expected total wasted exp (with discard): {expected_wasted_exp / prob_above_threshold}")
+    if prob_above_threshold > 0:
+        print(f"expected total wasted exp (with discard): {expected_wasted_exp / prob_above_threshold}")
+        print(f"expected total wasted tuner (with discard): {expected_wasted_tuner / prob_above_threshold}")

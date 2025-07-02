@@ -1,5 +1,6 @@
 from toolbox.utils.generic import check_privilege
 from toolbox.utils.ocr import setup_ocr
+from toolbox.utils.logger import logger
 
 check_privilege()
 setup_ocr()
@@ -14,7 +15,6 @@ from toolbox.tasks import EchoFilter
 import signal
 import os
 
-from toolbox.utils.logger import logger
 
 # Global state to handle task cancellation
 WORK_STATE = {

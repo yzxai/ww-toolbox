@@ -34,6 +34,8 @@ class AnalysisResult:
     prob_above_threshold_with_discard: float
     # The expected total wasted exp to reach the threshold if we have infinite same echo and follow the discard strategy.
     expected_total_wasted_exp: float
+    # The expected number of wasted tuners to reach the threshold if we have infinite same echo and follow the discard strategy.
+    expected_total_wasted_tuner: float
 
 
 async def get_brief_analysis(
@@ -51,7 +53,8 @@ async def get_brief_analysis(
         expected_wasted_exp=None,
         prob_above_threshold=prob_above_threshold,
         prob_above_threshold_with_discard=None,
-        expected_total_wasted_exp=None
+        expected_total_wasted_exp=None,
+        expected_total_wasted_tuner=None
     )
 
 async def get_analysis(
@@ -62,24 +65,27 @@ async def get_analysis(
 ) -> AnalysisResult:
     score = profile.get_score(coef)
     expected_score = profile.get_expected_score(coef)
-    expected_wasted_exp = profile.get_expected_wasted_exp(coef, score_thres, scheduler)
     prob_above_threshold = profile.prob_above_score(coef, score_thres)
-    prob_above_threshold_with_discard = profile.prob_above_threshold_with_discard(coef, score_thres, scheduler)
+    prob_above_threshold_with_discard, expected_wasted_exp, expected_wasted_tuner = profile.get_statistics(coef, score_thres, scheduler)
 
     exp = [0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
         24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600]
     
     if profile.level != 0:
         expected_wasted_exp -= exp[profile.level] * (1 - prob_above_threshold)
+        expected_wasted_tuner -= (profile.level // 5) * (1 - prob_above_threshold)
     
     if prob_above_threshold_with_discard == 0:
         expected_total_wasted_exp = float("inf")
+        expected_total_wasted_tuner = float("inf")
     elif prob_above_threshold_with_discard == 1:
         expected_total_wasted_exp = 0
+        expected_total_wasted_tuner = 0
     else:
         # E[wasted_exp_per_echo | discard] = E[wasted_exp_per_echo] / (1 - P[above_thres])
         # E[total_wasted_exp] = ((1 / P[above_thres]) - 1) * E[wasted_exp_per_echo | discard] = E[wasted_exp_per_echo] / P[above_thres]
         expected_total_wasted_exp = expected_wasted_exp / prob_above_threshold_with_discard
+        expected_total_wasted_tuner = expected_wasted_tuner / prob_above_threshold_with_discard
 
     return AnalysisResult(
         score=score,
@@ -87,7 +93,8 @@ async def get_analysis(
         expected_wasted_exp=expected_wasted_exp,
         prob_above_threshold=prob_above_threshold,
         prob_above_threshold_with_discard=prob_above_threshold_with_discard,
-        expected_total_wasted_exp=expected_total_wasted_exp
+        expected_total_wasted_exp=expected_total_wasted_exp,
+        expected_total_wasted_tuner=expected_total_wasted_tuner
     )
 
 async def upgrade_echo(profile: EchoProfile, work_state: dict) -> EchoProfile:

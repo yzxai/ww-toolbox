@@ -37,11 +37,19 @@ async function initializePage1() {
     let entryStatsData = {};
     let entryCoefData = {};
     let history = [];
+    let nextHistoryId = 0;
     let schedulerChart;
     let briefAnalysisProb = 0.0;
     let scannedProfiles = [
     ];
     let isWorking = false;
+    let historySortBy = 'exp'; // 'exp' or 'tuner'
+
+    // sort toggle icons
+    const sortExpIcon = document.getElementById('sort-exp');
+    const sortTunerIcon = document.getElementById('sort-tuner');
+    if (sortExpIcon) sortExpIcon.src = `${assetsBasePath}/imgs/exp.png`;
+    if (sortTunerIcon) sortTunerIcon.src = `${assetsBasePath}/imgs/tuner.png`;
 
     const debouncedUpdateAnalysis = debounce(updateAnalysisAndScoreDisplay, 50);
 
@@ -782,6 +790,7 @@ async function initializePage1() {
     const applyButton = document.getElementById('apply-scheduler-button');
     const probResult = document.getElementById('scheduler-prob');
     const expResult = document.getElementById('scheduler-exp');
+    const tunerResult = document.getElementById('scheduler-tuner');
 
     applyButton.addEventListener('click', async () => {
         applyButton.disabled = true;
@@ -811,12 +820,15 @@ async function initializePage1() {
             probResult.textContent = `${(result.prob_above_threshold_with_discard * 100).toFixed(2)}%`;
             
             const wastedExp = result.expected_total_wasted_exp;
+            const wastedTuner = result.expected_total_wasted_tuner;
             
             // Add to history
             history.unshift({
+                id: `history-${nextHistoryId++}`,
                 scheduler: [...userSelection.discard_scheduler],
                 prob: result.prob_above_threshold_with_discard,
-                exp: wastedExp
+                exp: wastedExp,
+                tuner: wastedTuner
             });
             if (history.length > 50) history.pop(); // Keep history size manageable
             renderHistory();
@@ -825,6 +837,17 @@ async function initializePage1() {
                 expResult.textContent = '无穷大';
             } else {
                 expResult.textContent = Math.round(wastedExp).toLocaleString();
+            }
+
+            // Update tuner result display
+            if (tunerResult) {
+                if (wastedTuner === undefined) {
+                    tunerResult.textContent = 'N/A';
+                } else if (wastedTuner === -1 || wastedTuner > 1e9) {
+                    tunerResult.textContent = '无穷大';
+                } else {
+                    tunerResult.textContent = Math.round(wastedTuner).toLocaleString();
+                }
             }
 
             if (wastedExp !== 0) {
@@ -837,6 +860,7 @@ async function initializePage1() {
             console.error("Error fetching full analysis:", error);
             probResult.textContent = '计算失败';
             expResult.textContent = '计算失败';
+            if (tunerResult) tunerResult.textContent = '计算失败';
         } finally {
             applyButton.disabled = false;
             applyButton.innerHTML = originalContent;
@@ -856,6 +880,7 @@ async function initializePage1() {
             // Reset full analysis results and history on any setting change
             probResult.textContent = 'N/A';
             expResult.textContent = 'N/A';
+            if (tunerResult) tunerResult.textContent = 'N/A';
             history = [];
             renderHistory();
 
@@ -909,46 +934,102 @@ async function initializePage1() {
 
     function renderHistory() {
         const historyList = document.getElementById('history-list');
-        historyList.innerHTML = '';
         
-        const sortedHistory = [...history].sort((a, b) => {
-            if (a.exp === -1 && b.exp === -1) return 0;
-            if (a.exp === -1) return 1;
-            if (b.exp === -1) return -1;
-            return a.exp - b.exp;
+        // --- FLIP Animation: Step 1 - Get old positions ---
+        const oldPositions = {};
+        historyList.querySelectorAll('.history-item').forEach(item => {
+            if (item.dataset.id) {
+                oldPositions[item.dataset.id] = item.getBoundingClientRect();
+            }
         });
 
+        const sortedHistory = [...history].sort((a, b) => {
+            const key = historySortBy === 'tuner' ? 'tuner' : 'exp';
+            const valA = a[key];
+            const valB = b[key];
+            if (valA === -1 && valB === -1) return 0;
+            if (valA === -1) return 1;
+            if (valB === -1) return -1;
+            return valA - valB;
+        });
+
+        // --- Temporarily detach list to prevent reflows while building ---
+        const parent = historyList.parentNode;
+        parent.removeChild(historyList);
+        historyList.innerHTML = '';
+
+        const newElements = [];
         sortedHistory.forEach(item => {
             const div = document.createElement('div');
             div.className = 'history-item';
+            div.dataset.id = item.id;
 
-            const thresholds = item.scheduler.map(t => `${(t * 100).toFixed(1)}%`).join(', ');
-            const prob = `${(item.prob * 100).toFixed(2)}%`;
-            const exp = item.exp === -1 ? '∞' : Math.round(item.exp).toLocaleString();
+            const expVal = item.exp === -1 ? '∞' : Math.round(item.exp).toLocaleString();
+            const expValDisplay = item.exp === -1 ? '∞' : Math.round(item.exp / 5000).toLocaleString();
+            const tunerVal = (item.tuner === undefined || item.tuner === -1) ? '∞' : Math.round(item.tuner).toLocaleString();
+
+            const expIcon = `${assetsBasePath}/imgs/exp.png`;
+            const tunerIcon = `${assetsBasePath}/imgs/tuner.png`;
 
             div.innerHTML = `
-                <div class="history-thresholds">[${thresholds}]</div>
-                <div class="history-results">P: ${prob} | E: ${exp}</div>
+                <div class="history-value"><img src="${expIcon}"><span class="history-pill">${expValDisplay}</span></div>
+                <div class="history-value"><img src="${tunerIcon}"><span class="history-pill">${tunerVal}</span></div>
             `;
 
             div.addEventListener('click', () => {
-                // Remove selected from others
                 historyList.querySelectorAll('.history-item').forEach(el => el.classList.remove('selected'));
-                // Add selected to current
                 div.classList.add('selected');
 
-                // Restore state
                 userSelection.discard_scheduler = [...item.scheduler];
                 if (schedulerChart) {
                     schedulerChart.updateAllPoints(userSelection.discard_scheduler);
                 }
-                probResult.textContent = prob;
-                expResult.textContent = exp;
+                probResult.textContent = `${(item.prob * 100).toFixed(2)}%`;
+                expResult.textContent = expVal;
+                if (tunerResult) tunerResult.textContent = tunerVal;
 
                 updateScannedEchosAnalysis();
             });
-
+            newElements.push(div);
             historyList.appendChild(div);
+        });
+
+        // --- Re-attach list ---
+        parent.appendChild(historyList);
+
+        // --- FLIP Animation: Step 2, 3, 4 - Last, Invert, Play ---
+        newElements.forEach(item => {
+            const id = item.dataset.id;
+            const oldPos = oldPositions[id];
+            
+            if (oldPos) { // An existing item that may have moved
+                const newPos = item.getBoundingClientRect();
+                const deltaX = oldPos.left - newPos.left;
+                const deltaY = oldPos.top - newPos.top;
+
+                if (Math.abs(deltaX) > 0.5 || Math.abs(deltaY) > 0.5) {
+                    item.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                    item.style.transition = 'transform 0s';
+    
+                    requestAnimationFrame(() => {
+                        item.style.transform = '';
+                        item.style.transition = 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                    });
+                }
+            } else { // A new item, animate its appearance
+                item.style.opacity = '0';
+                item.style.transform = 'scale(0.9)';
+                requestAnimationFrame(() => {
+                    item.style.opacity = '1';
+                    item.style.transform = 'scale(1)';
+                    item.style.transition = 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+                });
+            }
+
+            // Clean up transition style to avoid conflicts
+            item.addEventListener('transitionend', () => {
+                item.style.transition = '';
+            }, { once: true });
         });
     }
 
@@ -988,6 +1069,7 @@ async function initializePage1() {
         const maxProbEl = document.getElementById('echo-detail-max-prob');
         const probEl = document.getElementById('echo-detail-prob');
         const expEl = document.getElementById('echo-detail-exp');
+        const tunerEl = document.getElementById('echo-detail-tuner');
         const scoreEl = document.getElementById('echo-detail-score');
         const expectedScoreEl = document.getElementById('echo-detail-expected-score');
     
@@ -995,10 +1077,20 @@ async function initializePage1() {
             maxProbEl.textContent = `${(analysis.prob_above_threshold * 100).toFixed(2)}%`;
             probEl.textContent = `${(analysis.prob_above_threshold_with_discard * 100).toFixed(2)}%`;
             const wastedExp = analysis.expected_total_wasted_exp;
+            const wastedTuner = analysis.expected_total_wasted_tuner;
             if (wastedExp === -1 || wastedExp > 1e9) {
                 expEl.textContent = '无穷大';
             } else {
                 expEl.textContent = Math.round(wastedExp).toLocaleString();
+            }
+            if (tunerEl) {
+                if (wastedTuner === undefined) {
+                    tunerEl.textContent = 'N/A';
+                } else if (wastedTuner === -1 || wastedTuner > 1e9) {
+                    tunerEl.textContent = '无穷大';
+                } else {
+                    tunerEl.textContent = Math.round(wastedTuner).toLocaleString();
+                }
             }
             scoreEl.textContent = analysis.score.toFixed(2);
             expectedScoreEl.textContent = analysis.expected_score.toFixed(2);
@@ -1006,6 +1098,7 @@ async function initializePage1() {
             maxProbEl.textContent = 'N/A';
             probEl.textContent = 'N/A';
             expEl.textContent = 'N/A';
+            if (tunerEl) tunerEl.textContent = 'N/A';
             scoreEl.textContent = 'N/A';
             expectedScoreEl.textContent = 'N/A';
         }
@@ -1320,5 +1413,20 @@ async function initializePage1() {
         }
     
         return prob < threshold;
+    }
+
+    /* ---------- sort toggle ---------- */
+    function updateSortToggle(target) {
+        historySortBy = target;
+        if (sortExpIcon && sortTunerIcon) {
+            sortExpIcon.classList.toggle('selected', target === 'exp');
+            sortTunerIcon.classList.toggle('selected', target === 'tuner');
+        }
+        renderHistory();
+    }
+
+    if (sortExpIcon && sortTunerIcon) {
+        sortExpIcon.addEventListener('click', () => updateSortToggle('exp'));
+        sortTunerIcon.addEventListener('click', () => updateSortToggle('tuner'));
     }
 } 

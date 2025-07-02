@@ -26,7 +26,7 @@
         </ul>
     </p>
     <p>
-        在强化计算器中，你可以设定这四个丢弃的阈值，接着点击“应用”按钮保存此方案并计算期望损失经验值。你可以根据需求任意指定这四个阈值，当它们都为 0 时则意味着永远不丢弃声骸。你<b>必须至少点击一次“应用”</b>。
+        在强化计算器中，你可以设定这四个丢弃的阈值，接着点击"应用"按钮保存此方案并计算期望损失经验值。你可以根据需求任意指定这四个阈值，当它们都为 0 时则意味着永远不丢弃声骸。你<b>必须至少点击一次"应用"</b>。
     </p>
     <p>
         然后你就可以开始自动化了。下方的展示区域右上角有三个按钮，分别为<b>筛选</b>、<b>扫描</b>和<b>强化</b>。请依次点击这三个按钮，直到它们变成绿色为止。
@@ -219,17 +219,17 @@
         width: 220px;
     }
     .result-item {
-        padding: 10px 15px;
+        padding: 5px 8px;
         border-left: 4px solid #3498db;
         background-color: rgba(52, 152, 219, 0.1);
         border-radius: 0 4px 4px 0;
     }
     .result-label {
-        font-size: 0.9em;
+        font-size: 0.75em;
         color: #bdc3c7;
     }
     .result-value {
-        font-size: 1.6em;
+        font-size: 1.1em;
         font-weight: 300;
         color: #ecf0f1;
         text-shadow: 0 0 5px rgba(236, 240, 241, 0.3);
@@ -237,14 +237,42 @@
     .history-panel {
         display: flex;
         flex-direction: column;
-        width: 200px; /* Adjust width as needed */
+        width: 340px; /* Increased to provide more space */
         padding-left: 20px;
+    }
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
     }
     .history-title {
         font-size: 1.1em;
         font-weight: bold;
         margin-bottom: 10px;
         color: #ecf0f1;
+    }
+    /* Sort toggle styled like iOS switch */
+    .history-sort-toggle {
+        display: flex;
+        gap: 6px;
+        background-color: #1e2a38;
+        border-radius: 24px;
+        padding: 4px;
+        box-shadow: inset 0 0 4px rgba(0,0,0,0.6);
+    }
+    .sort-icon {
+        width: 40px; /* 2x original */
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s, transform 0.2s, box-shadow 0.3s;
+    }
+    .sort-icon.selected {
+        opacity: 1;
+        transform: scale(1.05);
+        box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.7);
     }
     .history-list {
         flex-grow: 1;
@@ -253,12 +281,15 @@
         min-height: 0; /* Flexbox fix to enable scrolling */
     }
     .history-item {
-        padding: 8px;
+        padding: 10px;
         margin-bottom: 8px;
         background-color: rgba(0, 0, 0, 0.2);
-        border-radius: 4px;
+        border-radius: 8px;
         cursor: pointer;
         transition: background-color 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 24px;
     }
     .history-item:hover {
         background-color: rgba(0, 0, 0, 0.4);
@@ -266,14 +297,25 @@
     .history-item.selected {
         background-color: #3498db;
     }
-    .history-thresholds {
-        font-size: 0.8em;
-        color: #bdc3c7;
-        margin-bottom: 4px;
+    /* History values row layout */
+    .history-value {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-    .history-results {
-        font-size: 0.9em;
-        font-weight: bold;
+    .history-value img {
+        width: 32px;
+        height: 32px;
+    }
+    .history-pill {
+        background: linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.05));
+        padding: 4px 10px;
+        border-radius: 14px;
+        font-size: 1.05em;
+        font-weight: 600;
+        color: #ffffff;
+        min-width: 70px;
+        text-align: center;
     }
 
     .scanned-echos-panel {
@@ -602,10 +644,20 @@
                 <p class="result-label">此策略下期望损失经验值</p>
                 <p id="scheduler-exp" class="result-value">N/A</p>
             </div>
+            <div class="result-item">
+                <p class="result-label">此策略下期望损失调谐器</p>
+                <p id="scheduler-tuner" class="result-value">N/A</p>
+            </div>
         </div>
         <div class="separator-vertical"></div>
         <div class="history-panel">
-            <h3 class="history-title">历史记录</h3>
+            <div class="history-header">
+                <h3 class="history-title">历史记录</h3>
+                <div class="history-sort-toggle">
+                    <img id="sort-exp" class="sort-icon selected" src="../assets/imgs/exp.png"/>
+                    <img id="sort-tuner" class="sort-icon" src="../assets/imgs/tuner.png"/>
+                </div>
+            </div>
             <div id="history-list" class="history-list"></div>
         </div>
     </div>
@@ -647,6 +699,10 @@
             <div class="result-item">
                 <p class="result-label">此策略下期望损失经验值</p>
                 <p id="echo-detail-exp" class="result-value">N/A</p>
+            </div>
+            <div class="result-item">
+                <p class="result-label">此策略下期望损失调谐器</p>
+                <p id="echo-detail-tuner" class="result-value">N/A</p>
             </div>
             <div class="result-item">
                 <p class="result-label">当前分数</p>
