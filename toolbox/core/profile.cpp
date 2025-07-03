@@ -8,6 +8,7 @@
 #include <map>
 #include <list>
 #include <algorithm>
+#include <optional>
 
 namespace py = pybind11;
 
@@ -68,17 +69,6 @@ double get_score(const EchoProfile& profile, const EntryCoef& coef) {
 }
 
 namespace std {
-    template <>
-    struct hash<EchoProfile> {
-        std::size_t operator()(const EchoProfile& p) const {
-            std::size_t h = std::hash<int>()(p.level);
-            for (const auto& kv : p.values) if (std::abs(kv.second) > 1e-5) {
-                h ^= std::hash<std::string>()(kv.first) + std::hash<int>()(int(std::round(kv.second * 10)));
-            }
-            return h;
-        }
-    };
-
     template <>
     struct hash<MemoKey> {
         std::size_t operator()(const MemoKey& k) const {
@@ -276,7 +266,7 @@ Result get_statistics(
     static std::vector<int> exp = {0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
         24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600};
 
-    static LRUCache<CacheKey, std::unordered_map<MemoKey, Result>, CacheKeyHash> waste_exp_cache(5);
+    static LRUCache<CacheKey, std::unordered_map<MemoKey, Result>, CacheKeyHash> waste_exp_cache(20);
     CacheKey current_key{coef, score_thres, scheduler};
 
     auto& stored_expectations = waste_exp_cache[current_key];
@@ -350,6 +340,84 @@ Result get_statistics(
     return solve(p);
 }
 
+EchoProfile get_example_profile_above_threshold(
+    int level,
+    double prob_above_threshold,
+    const EntryCoef& coef, 
+    double score_thres,
+    const py::dict& stat_data
+) {
+    static std::map<double, EchoProfile> example_profiles[5];
+    static std::optional<CacheKey> last_key;
+
+    std::vector<std::string> keys;
+    for (std::unordered_map<std::string, double>::const_iterator it = coef.values.begin(); it != coef.values.end(); ++it) keys.push_back(it->first);
+
+    std::function<double(const EchoProfile&)> statistic_significance = [&](const EchoProfile& p) -> double {
+        double result = 0.0;
+        for (const auto& kv : p.values) {
+            if (std::abs(kv.second) < 1e-5) continue;
+            py::list dist = stat_data[kv.first.c_str()].attr("get")("distribution", py::list());
+            for (auto entry : dist) {
+                double value = py::float_(entry["value"]);
+                double pprob = py::float_(entry["probability"]);
+                if (std::abs(value - kv.second) < 1e-5) result += log(pprob);
+            }
+        }
+        return result;
+    };
+
+    CacheKey key{coef, score_thres, DiscardScheduler()};
+
+    if (!last_key || !(*last_key == key)) {
+        last_key = key;
+        for (int i = 0; i < 5; ++i) example_profiles[i].clear();
+        example_profiles[0][0.0] = EchoProfile();
+        for (int i = 0; i < 4; ++i) {
+            for (const auto& kv : example_profiles[i]) {
+                EchoProfile p = kv.second;
+                std::vector<std::string> avail_keys;
+                for (const auto& kv2 : coef.values) {
+                    double v = 0.0;
+                    std::unordered_map<std::string, double>::const_iterator it3 = p.values.find(kv2.first);
+                    if (it3 != p.values.end()) v = it3->second;
+                    if (std::abs(v) < 1e-5) avail_keys.push_back(kv2.first);
+                }
+                for (const auto& key : avail_keys) {
+                    EchoProfile new_p = p;
+                    new_p.level = (i + 1) * 5;
+                    py::list dist = stat_data[key.c_str()].attr("get")("distribution", py::list());
+                    for (auto entry : dist) {
+                        double value = py::float_(entry["value"]);
+                        new_p.values[key] = value;
+
+                        double stat_sig = statistic_significance(new_p);
+                        double score_rounded = std::round(get_score(new_p, coef) * 10) / 10.0;
+
+                        if (example_profiles[i + 1].count(score_rounded) == 0) {
+                            example_profiles[i + 1][score_rounded] = new_p;
+                        } else if (statistic_significance(example_profiles[i + 1][score_rounded]) < stat_sig) {
+                            example_profiles[i + 1][score_rounded] = new_p;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    double min_prob = 2.0;
+    EchoProfile best_profile;
+    for (const auto& p : example_profiles[level / 5]) {
+        double prob = prob_above_score(p.second, coef, score_thres, stat_data);
+        if (prob >= prob_above_threshold && prob < min_prob) {
+            min_prob = prob;
+            best_profile = p.second;
+        }
+    }
+
+    return best_profile;
+}
+
 PYBIND11_MODULE(profile_cpp, m) {
     py::class_<EntryCoef>(m, "EntryCoef")
         .def(py::init<>())
@@ -376,4 +444,5 @@ PYBIND11_MODULE(profile_cpp, m) {
 
     m.def("prob_above_score", &prob_above_score, "C++ version of prob_above_score");
     m.def("get_statistics", &get_statistics, "C++ version of get_statistics");
+    m.def("get_example_profile_above_threshold", &get_example_profile_above_threshold, "Get an example profile with a similar probability to reach the threshold");
 }

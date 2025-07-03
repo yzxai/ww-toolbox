@@ -63,7 +63,6 @@ class EchoTask(BaseTask):
 
     def to_page(self, target: Page):
         logger.info(f"To page: {target}")
-        time.sleep(0.5)
 
         # bfs to find the shortest path
         def bfs(start: Page) -> list[Page]:

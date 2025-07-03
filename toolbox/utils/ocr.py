@@ -167,7 +167,9 @@ def match_single_object_template(
 def _detect_rectangles_raw(
     pil_image: Image.Image,
     aspect_ratio_range=(0.8, 1.2),
-    area_range=(200, 1e3)
+    area_range=(200, 1e3),
+    canny_thresh_low=50,
+    canny_thresh_high=100
 ) -> list[tuple[int, int, int, int]]:
     """Detects raw rectangular regions from a PIL image without merging."""
     image = np.array(pil_image)
@@ -179,7 +181,7 @@ def _detect_rectangles_raw(
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blur, 100, 150)
+    edges = cv2.Canny(blur, canny_thresh_low, canny_thresh_high)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     rects = []
@@ -218,7 +220,9 @@ def detect_and_merge_rectangles_pil(
     aspect_ratio_range=(0.8, 1.2),
     area_range=(300, 1e3),
     iou_threshold=0.2,
-    num_perturbations=30,
+    num_perturbations=50,
+    brightness_threshold=100,
+    bright_area_ratio_threshold=0.3,
     debug=False
 ) -> list[tuple[int, int, int, int]]:
     """
@@ -231,6 +235,8 @@ def detect_and_merge_rectangles_pil(
         area_range (tuple): The area range (min_area, max_area).
         iou_threshold (float): The IoU threshold for merging rectangles.
         num_perturbations (int): The number of random perturbations to apply.
+        brightness_threshold (int): The threshold for bright pixels.
+        bright_area_ratio_threshold (float): The threshold for the ratio of bright pixels.
         debug (bool): Whether to visualize the results.
 
     Returns:
@@ -244,23 +250,58 @@ def detect_and_merge_rectangles_pil(
 
     all_rects = []
 
-    # Original image
+    # Original image with default canny thresholds
     all_rects.extend(_detect_rectangles_raw(scaled_image, aspect_ratio_range, area_range))
 
     # Perturbed images
     for _ in range(num_perturbations):
-        perturbed_image = scaled_image.copy()
+        current_image = scaled_image.copy()
+
+        # Apply a chain of random enhancements
         enhancers = [
-            (ImageEnhance.Brightness, random.uniform(0.9, 1.1)),
-            (ImageEnhance.Contrast, random.uniform(0.9, 1.1)),
-            (ImageEnhance.Sharpness, random.uniform(1.1, 1.3)),
+            (ImageEnhance.Brightness, random.uniform(0.8, 1.2)),
+            (ImageEnhance.Contrast, random.uniform(0.8, 1.5)),
+            (ImageEnhance.Sharpness, random.uniform(0.7, 1.3)),
         ]
         random.shuffle(enhancers)
         
         for enhancer, factor in enhancers:
-            perturbed_image = enhancer(perturbed_image).enhance(factor)
+            current_image = enhancer(current_image).enhance(factor)
         
-        all_rects.extend(_detect_rectangles_raw(perturbed_image, aspect_ratio_range, area_range))
+        # Convert to numpy for cv2-based preprocessing
+        np_image = np.array(current_image.convert('L'))
+
+        # Apply a random preprocessing strategy before Canny detection
+        strategy = random.choice(['blur', 'morph', 'equalize', 'none'])
+
+        if strategy == 'blur':
+            blur_type = random.choice(['gaussian', 'median', 'bilateral'])
+            if blur_type == 'gaussian':
+                kernel_size = random.choice([3, 5, 7])
+                processed_image = cv2.GaussianBlur(np_image, (kernel_size, kernel_size), 0)
+            elif blur_type == 'median':
+                kernel_size = random.choice([3, 5, 7])
+                processed_image = cv2.medianBlur(np_image, kernel_size)
+            else:  # bilateral
+                processed_image = cv2.bilateralFilter(np_image, d=9, sigmaColor=75, sigmaSpace=75)
+        elif strategy == 'morph':
+            op = random.choice([cv2.MORPH_OPEN, cv2.MORPH_CLOSE])
+            kernel = np.ones((3, 3), np.uint8)
+            processed_image = cv2.morphologyEx(np_image, op, kernel)
+        elif strategy == 'equalize':
+            processed_image = cv2.equalizeHist(np_image)
+        else:  # 'none'
+            processed_image = np_image
+        
+        pil_processed = Image.fromarray(processed_image)
+
+        # Use randomized Canny thresholds for more robustness
+        canny_low = random.randint(30, 70)
+        canny_high = random.randint(80, 200)
+
+        all_rects.extend(_detect_rectangles_raw(
+            pil_processed, aspect_ratio_range, area_range, canny_low, canny_high
+        ))
 
     # Merge all collected rectangles
     merged = merge_rectangles(all_rects, iou_threshold)
@@ -280,16 +321,37 @@ def detect_and_merge_rectangles_pil(
     merged = [(round(x * scale_back), round(y * scale_back), 
               round(w * scale_back), round(h * scale_back)) for x, y, w, h in merged]
 
+    # Filter rectangles based on internal brightness
+    final_rects = []
+    for x, y, w, h in merged:
+        if w <= 0 or h <= 0:
+            continue
+        
+        rect_img = pil_image.crop((x, y, x + w, y + h)).convert('L')
+        rect_data = np.array(rect_img)
+        
+        bright_pixels = np.sum(rect_data > brightness_threshold)
+        total_pixels = w * h
+        
+        bright_ratio = bright_pixels / total_pixels
+        
+        if bright_ratio <= bright_area_ratio_threshold:
+            final_rects.append((x, y, w, h))
+
     if debug:
         vis_image = np.array(pil_image.convert('RGB'))
         vis_image = cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR)
+        # Draw all merged rectangles in red
         for x, y, w, h in merged:
+            cv2.rectangle(vis_image, (x, y), (x + w, y + h), (0, 0, 255), 1)
+        # Draw final, filtered rectangles in green
+        for x, y, w, h in final_rects:
             cv2.rectangle(vis_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.imshow("Merged Rectangles (Robust)", vis_image)
+        cv2.imshow("Merged & Filtered Rectangles", vis_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    return merged
+    return final_rects
 
 def merge_rectangles(rects: list[tuple[int, int, int, int]], iou_thresh=0.2) -> list[tuple[int, int, int, int]]:
     """

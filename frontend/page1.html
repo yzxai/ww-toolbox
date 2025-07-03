@@ -26,7 +26,7 @@
         </ul>
     </p>
     <p>
-        在强化计算器中，你可以设定这四个丢弃的阈值，接着点击"应用"按钮保存此方案并计算期望损失经验值。你可以根据需求任意指定这四个阈值，当它们都为 0 时则意味着永远不丢弃声骸。你<b>必须至少点击一次"应用"</b>。
+        在强化计算器中，你可以设定这四个丢弃的阈值，接着点击"应用"按钮保存此方案并计算期望损失经验值和调谐器数量。你可以根据需求任意指定这四个阈值，当它们都为 0 时则意味着永远不丢弃声骸。将鼠标移到阈值上方后会显示出达到当前设定阈值的声骸大致长什么样子。你<b>必须至少点击一次"应用"</b>。
     </p>
     <p>
         然后你就可以开始自动化了。下方的展示区域右上角有三个按钮，分别为<b>筛选</b>、<b>扫描</b>和<b>强化</b>。请依次点击这三个按钮，直到它们变成绿色为止。
@@ -136,6 +136,7 @@
         justify-content: space-between;
         flex-basis: 330px; /* 220px * 1.5 */
         flex-grow: 0;
+        position: relative; /* Add for child positioning */
     }
     .apply-button {
         background-color: #27ae60;
@@ -327,7 +328,7 @@
         color: #343a40;
         gap: 20px;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        height: 700px;
+        height: 760px;
         border: 1px solid #dee2e6;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         margin-bottom: 40vh;
@@ -513,31 +514,41 @@
         gap: 10px;
     }
 
-    .icon-btn {
+    .panel-actions .icon-btn {
         background-color: #ffffff;
         border: 1px solid #ced4da;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
+        border-radius: 8px; /* From 50% to rounded rectangle */
+        width: auto; /* Auto width */
+        height: auto;
+        padding: 8px 12px;
         display: flex;
         justify-content: center;
         align-items: center;
+        gap: 6px; /* Space between icon and text */
         cursor: pointer;
-        color: #6c757d;
+        color: #495057;
+        font-size: 0.95em;
+        font-weight: 500;
         transition: all 0.2s ease;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    
+    .panel-actions .icon-btn .mdi {
+        font-size: 1.2em; /* Slightly larger icon */
     }
 
     .icon-btn:hover {
         background-color: #e9ecef;
         color: #007bff;
         border-color: #b8daff;
+        transform: translateY(-2px);
     }
 
     .icon-btn:disabled {
         background-color: #e9ecef;
         cursor: not-allowed;
         color: #adb5bd;
+        transform: none;
     }
 
     .icon-btn.btn-success {
@@ -591,6 +602,71 @@
     .scheduler-actions-container .apply-button {
         width: 35%;
     }
+
+    .example-profile-popup {
+        position: absolute;
+        left: 100%; 
+        margin-left: 20px;
+        width: 300px;
+        background-color: rgba(20, 30, 45, 0.95);
+        backdrop-filter: blur(8px);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        color: white;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s, visibility 0.3s, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 100;
+        transform: translateY(-50%) scale(0.95);
+        transform-origin: left center;
+    }
+
+    .example-profile-popup.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) scale(1);
+    }
+
+    .example-profile-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .example-profile-header div:first-child {
+        font-size: 1.1em;
+        font-weight: bold;
+    }
+
+    #example-profile-entries {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    #example-profile-entries li {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 5px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+
+    #example-profile-entries li:nth-child(odd) {
+        background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    #example-profile-entries .entry-name {
+        font-weight: 500;
+        color: #bdc3c7;
+    }
+
+    #example-profile-entries .entry-value {
+        font-weight: 600;
+        color: #3498db;
+    }
 </style>
 
 <hr class="dashed"/>
@@ -633,6 +709,7 @@
                 <button id="default-params-btn" class="default-params-button">使用默认参数</button>
                 <button id="apply-scheduler-button" class="apply-button">应用</button>
             </div>
+            <div id="example-profile-popup" class="example-profile-popup"></div>
         </div>
         <div class="separator-vertical"></div>
         <div class="scheduler-results">
@@ -654,8 +731,8 @@
             <div class="history-header">
                 <h3 class="history-title">历史记录</h3>
                 <div class="history-sort-toggle">
-                    <img id="sort-exp" class="sort-icon selected" src="../assets/imgs/exp.png"/>
-                    <img id="sort-tuner" class="sort-icon" src="../assets/imgs/tuner.png"/>
+                    <img id="sort-exp" class="sort-icon selected"/>
+                    <img id="sort-tuner" class="sort-icon"/>
                 </div>
             </div>
             <div id="history-list" class="history-list"></div>
@@ -670,12 +747,15 @@
             <div class="panel-actions">
                 <button id="apply-filter-btn" class="icon-btn" title="应用筛选">
                     <i class="mdi mdi-filter-variant"></i>
+                    <span>筛选</span>
                 </button>
                 <button id="scan-echos-btn" class="icon-btn" title="扫描声骸">
                     <i class="mdi mdi-scanner"></i>
+                    <span>扫描</span>
                 </button>
                 <button id="start-work-btn" class="icon-btn" title="开始强化" disabled>
                     <i class="mdi mdi-play"></i>
+                    <span>强化</span>
                 </button>
             </div>
         </div>

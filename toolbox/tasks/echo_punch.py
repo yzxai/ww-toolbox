@@ -13,7 +13,7 @@ class EchoPunch(EchoTask):
         self.interaction.ensure_connected()
         self.to_page(Page.UPGRADE)
         self.interaction.click_ocr("阶段放入", region=(0, 0.6, 0.5, 1))
-        time.sleep(1)
+        time.sleep(0.5)
 
         screenshot = self.interaction.screenshot_region(0.466, 0.18, 0.534, 0.212)
         if len(ocr_pattern(screenshot, "不足")) > 0:
@@ -63,7 +63,7 @@ class EchoPunch(EchoTask):
             raise Exception("Failed to capture the level after 10 retries")
 
         self.interaction.send_key("esc")
-        time.sleep(1)
+        time.sleep(0.5)
 
         if overflow:
             self.interaction.send_key("esc")
@@ -71,7 +71,7 @@ class EchoPunch(EchoTask):
 
         self.to_page(Page.TUNE)
         self.interaction.click_ocr("调谐", region=(0, 0.87, 0.5, 1))
-        time.sleep(1.2)
+        time.sleep(1)
 
         while True:
             screenshot = self.interaction.screenshot_region(0.346, 0.371, 0.679, 0.402)

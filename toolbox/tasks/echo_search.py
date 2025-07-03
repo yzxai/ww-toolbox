@@ -63,24 +63,30 @@ class EchoSearch(EchoTask):
             num_checked = 0
 
             for box in boxes:
-                if work_state["cancel_requested"]: return None
-
                 x, y, w, h = box
                 x_ratio = (x + w / 2) / width + left_top[0]
                 y_ratio = (y + h / 2) / height + left_top[1]
 
                 num_checked += 1
+                level = None
                     
                 # quick check on the level 
-                while True:
+                for _ in range(5):
+                    if work_state["cancel_requested"]: return None
+
                     _screenshot = self.interaction.screenshot_region(x_ratio - 0.05, y_ratio + 0.01, x_ratio + 0.05, y_ratio + 0.05)
                     level = ocr_pattern(_screenshot, "^\+\d+")
                     if len(level) > 0:
                         level = int(level[0].text[1:])
                         break
 
+                    level = None
                     logger.info(f"ocr failed when checking the level, retrying...")
                     time.sleep(0.5)
+                
+                if level is None:
+                    logger.warning(f"Failed to check the level after 5 retries, skipping...")
+                    continue
                 
                 if level > profile.level:
                     continue
@@ -122,16 +128,25 @@ class EchoSearch(EchoTask):
                             x_ratio = (x + w / 2) / width + left_top[0]
                             y_ratio = (y + h / 2) / height + left_top[1]
 
+                            level = None
+
                             # quick check on the level 
-                            while True:
+                            for _ in range(5):
+                                if work_state["cancel_requested"]: return None
+                                
                                 _screenshot = self.interaction.screenshot_region(x_ratio - 0.05, y_ratio + 0.01, x_ratio + 0.05, y_ratio + 0.05)
                                 level = ocr_pattern(_screenshot, "^\+\d+")
                                 if len(level) > 0:
                                     level = int(level[0].text[1:])
                                     break
 
+                                level = None
                                 logger.info(f"ocr failed when checking the level, retrying...")
                                 time.sleep(0.5)
+                            
+                            if level is None:
+                                logger.warning(f"Failed to check the level after 5 retries, skipping...")
+                                continue
                             
                             if level > profile.level:
                                 continue

@@ -53,6 +53,68 @@ async function initializePage1() {
 
     const debouncedUpdateAnalysis = debounce(updateAnalysisAndScoreDisplay, 50);
 
+    const schedulerInputs = [
+        document.getElementById('scheduler-input-0'),
+        document.getElementById('scheduler-input-1'),
+        document.getElementById('scheduler-input-2'),
+        document.getElementById('scheduler-input-3'),
+    ];
+    const examplePopup = document.getElementById('example-profile-popup');
+    let hoverTimeout;
+    const indexToLevel = [5, 10, 15, 20];
+
+    schedulerInputs.forEach((input, index) => {
+        const row = input.closest('.scheduler-control-row');
+        if (!row) return;
+
+        row.addEventListener('mouseenter', () => {
+            clearTimeout(hoverTimeout);
+            hoverTimeout = setTimeout(async () => {
+                const prob = parseFloat(input.value) / 100;
+                if (isNaN(prob) || prob < 0) return;
+
+                // Position the popup vertically next to the hovered row
+                const topPosition = row.offsetTop + row.offsetHeight / 2;
+                examplePopup.style.top = `${topPosition}px`;
+
+                examplePopup.innerHTML = '正在查找标准示例...';
+                examplePopup.classList.add('visible');
+
+                const payload = {
+                    level: indexToLevel[index],
+                    prob: prob,
+                    coef: userSelection.entry_weights,
+                    score_thres: parseFloat(calculateTotalScore())
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/get_example_profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    if (result && result.profile) {
+                        renderExampleProfile(result.profile, result.actual_prob);
+                    } else {
+                        console.log(result);
+                        examplePopup.innerHTML = '未找到合适的示例。';
+                    }
+                } catch (error) {
+                    console.error("Error fetching example profile:", error);
+                    examplePopup.innerHTML = '查询失败。';
+                }
+
+            }, 500);
+        });
+
+        row.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimeout);
+            examplePopup.classList.remove('visible');
+        });
+    });
+
     const mainEntryOptions = {
         1: ['不指定主属性', '攻击', '防御', '生命'],
         3: ['不指定主属性', '攻击', '防御', '生命', '导电伤害加成', '湮灭伤害加成', '气动伤害加成', '热熔伤害加成', '冷凝伤害加成', '衍射伤害加成', '共鸣效率'],
@@ -1390,10 +1452,6 @@ async function initializePage1() {
         if (!item.analysis || item.profile.level >= 25) {
             return false;
         }
-
-        if (item.analysis.expected_total_wasted_exp < 0) {
-            return false;
-        }
     
         const level = item.profile.level;
         const prob = item.analysis.prob_above_threshold;
@@ -1428,5 +1486,24 @@ async function initializePage1() {
     if (sortExpIcon && sortTunerIcon) {
         sortExpIcon.addEventListener('click', () => updateSortToggle('exp'));
         sortTunerIcon.addEventListener('click', () => updateSortToggle('tuner'));
+    }
+
+    function renderExampleProfile(profile, actual_prob) {
+        let entriesHtml = '';
+        for (const [key, value] of Object.entries(profile)) {
+            if (key !== 'level' && key !== 'name' && value) {
+                const entryName = entryStatsData[key] ? entryStatsData[key].name : key;
+                const entryType = entryStatsData[key] ? entryStatsData[key].type : '';
+                entriesHtml += `<li><span class="entry-name">${entryName}</span><span class="entry-value">${value}${entryType === 'percentage' ? '%' : ''}</span></li>`;
+            }
+        }
+
+        examplePopup.innerHTML = `
+            <div class="example-profile-header">
+                <div>Lv.${profile.level} 声骸示例</div>
+                <div style="font-size: 0.8em; color: #bdc3c7;">达标概率: ${(actual_prob * 100).toFixed(2)}%</div>
+            </div>
+            <ul id="example-profile-entries">${entriesHtml}</ul>
+        `;
     }
 } 

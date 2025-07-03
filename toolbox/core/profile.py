@@ -116,6 +116,12 @@ class EchoProfile:
             setattr(self, key, value)
         return self
     
+    @classmethod
+    def from_cpp_profile(cls, cpp_profile: profile_cpp.EchoProfile) -> "EchoProfile":
+        data = cpp_profile.values
+        data['level'] = cpp_profile.level
+        return cls().from_dict(data)
+
     def __hash__(self):
         return hash(tuple([(k, v) for k, v in self.__dict__.items() if k not in ["name"]]))
     
@@ -200,7 +206,7 @@ class EchoProfile:
                 for name in echo_data.keys():
                     # create a regex pattern for the name to ignore rare characters 
                     # and match the line with the pattern
-                    rare_chars = ['魇', '·', '螯', '獠', '鬃', '翎']
+                    rare_chars = ['魇', '·', '螯', '獠', '鬃', '翎', '鸷', '鹭', '傀', '哨', '蜥', '磐', '铎', '镰', '簇', '湮', '釉', '蛰', '鳄', '飓']
 
                     substituted_name = name
 
@@ -309,20 +315,32 @@ class EchoProfile:
             float(res.expected_wasted_tuner),
         )
 
-def test():
-    image = Image.open("test.png")
+def get_example_profile_above_threshold(level: int, prob: float, coef: EntryCoef, score_thres: float) -> EchoProfile:
+    cpp_profile = profile_cpp.get_example_profile_above_threshold(
+        level, prob, coef.to_cpp(), score_thres, stat_data
+    )
+    # The C++ function returns an empty profile if not found
+    if cpp_profile.level == 0 and not cpp_profile.values:
+        return None
+    return EchoProfile.from_cpp_profile(cpp_profile)
 
-    profile = EchoProfile().from_image(image)
+def test():
+
+    profile = EchoProfile(
+        level=10,
+        def_num=50,
+        cri_rate=8.1,
+    )
 
     print(f"{profile=}")
 
     threshold_profile = EchoProfile(
         level=25,
         hp_rate=9.4,
-        hp_num=430,
-        normal_dmg=8.6,
-        resonance_eff=8.4,
-        resonance_burst=7.1,
+        cri_rate=8.7,
+        cri_dmg=17.4,
+        def_num=50,
+        def_rate=9.4
     )
     coef = EntryCoef("Cartethyia")
 
@@ -331,10 +349,10 @@ def test():
     print(f"score of profile: {profile.get_score(coef)}")
 
     init_profile = EchoProfile()
-    print(f"probability to get at least {threshold_score} score: {init_profile.prob_above_score(coef, threshold_score)}")
+    print(f"probability to get at least {threshold_score} score: {profile.prob_above_score(coef, threshold_score)}")
 
-    scheduler = DiscardScheduler(level_5_9=0.1119, level_10_14=0.1119, level_15_19=0.1119, level_20_24=0.1119)
-    prob_above_threshold, expected_wasted_exp, expected_wasted_tuner = init_profile.get_statistics(coef, threshold_score, scheduler)
+    scheduler = DiscardScheduler(level_5_9=0.0144469, level_10_14=0.0144469, level_15_19=0.0144469, level_20_24=0.0144469)
+    prob_above_threshold, expected_wasted_exp, expected_wasted_tuner = profile.get_statistics(coef, threshold_score, scheduler)
     print(f"expected wasted exp: {expected_wasted_exp}")
     print(f"expected wasted tuner: {expected_wasted_tuner}")
     print(f"probability to get at least {threshold_score} score with discard: {prob_above_threshold}")
@@ -342,3 +360,6 @@ def test():
     if prob_above_threshold > 0:
         print(f"expected total wasted exp (with discard): {expected_wasted_exp / prob_above_threshold}")
         print(f"expected total wasted tuner (with discard): {expected_wasted_tuner / prob_above_threshold}")
+
+if __name__ == "__main__":
+    test()

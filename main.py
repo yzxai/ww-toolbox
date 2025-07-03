@@ -120,8 +120,39 @@ async def get_full_analysis_endpoint(data: dict):
 
     if result.expected_total_wasted_exp == float('inf'):
         result.expected_total_wasted_exp = -1
+    
+    if result.expected_total_wasted_tuner == float('inf'):
+        result.expected_total_wasted_tuner = -1
 
     return result
+
+@app.post("/api/get_example_profile")
+async def get_example_profile_endpoint(data: dict):
+    level = data.get("level")
+    prob = data.get("prob")
+    coef_data = data.get("coef", {})
+    score_thres = data.get("score_thres", 0.0)
+
+    if level is None or prob is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Missing level or prob")
+
+    coef = EntryCoef()
+    for key, value in coef_data.items():
+        if hasattr(coef, key):
+            setattr(coef, key, value)
+    
+    profile = await api.get_example_profile(level, prob, coef, score_thres)
+    
+    if profile is None:
+        return None
+        
+    actual_prob = profile.prob_above_score(coef, score_thres)
+    
+    return {
+        "profile": profile,
+        "actual_prob": actual_prob
+    }
 
 @app.post("/api/upgrade_echo")
 async def upgrade_echo_endpoint(profile_data: dict):
