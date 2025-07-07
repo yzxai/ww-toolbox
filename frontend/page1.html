@@ -579,8 +579,124 @@
         width: 100%;
     }
 
+    .optimal-scheduler-button {
+        width: 45%;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        box-sizing: border-box;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        position: relative;
+    }
+
+    .optimal-scheduler-button:hover {
+        background-color: #2980b9;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .optimal-scheduler-button:disabled {
+        background-color: #7f8c8d;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .weight-popup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 400px;
+        height: 400px;
+        background: linear-gradient(135deg, rgba(30, 40, 60, 0.98), rgba(20, 30, 50, 0.98));
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        padding: 30px;
+        color: white;
+        box-shadow: 
+            0 25px 60px rgba(0, 0, 0, 0.6),
+            0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+            0 1px 0 rgba(255, 255, 255, 0.1) inset;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1000;
+        scale: 0.8;
+    }
+
+    .weight-popup.visible {
+        opacity: 1;
+        visibility: visible;
+        scale: 1;
+    }
+
+    .weight-popup-header {
+        text-align: center;
+        margin-bottom: 25px;
+        font-size: 1.3em;
+        font-weight: 600;
+        background: linear-gradient(135deg, #ffffff, #e8f4fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        padding-bottom: 15px;
+    }
+
+    .weight-chart-container {
+        position: relative;
+        width: 280px;
+        height: 280px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #weight-chart {
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+        filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.3));
+        transition: filter 0.3s ease;
+    }
+
+    #weight-chart:hover {
+        filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.4));
+    }
+
+    #weight-chart.grabbing {
+        cursor: grabbing;
+        filter: drop-shadow(0 15px 40px rgba(0, 0, 0, 0.5));
+    }
+
+    .weight-popup-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        z-index: 999;
+    }
+
+    .weight-popup-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+    }
+
     .default-params-button {
-        width: 60%;
+        width: 25%;
         background-color: #ffc107;
         color: #212529;
         border: none;
@@ -600,7 +716,7 @@
     }
 
     .scheduler-actions-container .apply-button {
-        width: 35%;
+        width: 25%;
     }
 
     .example-profile-popup {
@@ -707,7 +823,9 @@
             </div>
             <div class="scheduler-actions-container">
                 <button id="default-params-btn" class="default-params-button">使用默认参数</button>
+                <button id="optimal-scheduler-btn" class="optimal-scheduler-button">计算最优策略</button>
                 <button id="apply-scheduler-button" class="apply-button">应用</button>
+
             </div>
             <div id="example-profile-popup" class="example-profile-popup"></div>
         </div>
@@ -737,6 +855,14 @@
             </div>
             <div id="history-list" class="history-list"></div>
         </div>
+    </div>
+</div>
+
+<div class="weight-popup-overlay" id="weight-popup-overlay"></div>
+<div id="weight-popup" class="weight-popup">
+    <div class="weight-popup-header">资源权重设置</div>
+    <div class="weight-chart-container">
+        <svg id="weight-chart" viewBox="0 0 300 300"></svg>
     </div>
 </div>
 

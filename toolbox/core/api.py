@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from toolbox.tasks import EchoFilter, EchoPageSelector, EchoScan, EchoSearch, EchoPunch
-from .profile import EchoProfile, EntryCoef, DiscardScheduler, get_example_profile_above_threshold as get_example_profile_py
+from .profile import EchoProfile, EntryCoef, DiscardScheduler, get_example_profile_above_threshold as get_example_profile_py, get_optimal_scheduler as get_optimal_scheduler_py
 from fastapi.concurrency import run_in_threadpool
 
 current_filter: EchoFilter = None
@@ -106,6 +106,26 @@ async def get_example_profile(level: int, prob: float, coef: EntryCoef, score_th
         score_thres
     )
     return profile
+
+async def get_optimal_scheduler(
+    num_echo_weight: float,
+    exp_weight: float,
+    tuner_weight: float,
+    coef: EntryCoef,
+    score_thres: float,
+    iterations: int = 20
+) -> DiscardScheduler:
+    """Calculate optimal discard scheduler based on resource weights."""
+    scheduler = await run_in_threadpool(
+        get_optimal_scheduler_py,
+        num_echo_weight,
+        exp_weight,
+        tuner_weight,
+        coef,
+        score_thres,
+        iterations
+    )
+    return scheduler
 
 async def upgrade_echo(profile: EchoProfile, work_state: dict) -> EchoProfile:
     global current_filter

@@ -154,6 +154,34 @@ async def get_example_profile_endpoint(data: dict):
         "actual_prob": actual_prob
     }
 
+@app.post("/api/get_optimal_scheduler")
+async def get_optimal_scheduler_endpoint(data: dict):
+    num_echo_weight = data.get("num_echo_weight", 1.0)
+    exp_weight = data.get("exp_weight", 1.0)
+    tuner_weight = data.get("tuner_weight", 1.0)
+    coef_data_dict = data.get("coef", {})
+    score_thres = data.get("score_thres", 0.0)
+    iterations = data.get("iterations", 20)
+
+    coef = EntryCoef()
+    for key, value in coef_data_dict.items():
+        if hasattr(coef, key):
+            setattr(coef, key, value)
+
+    scheduler = await api.get_optimal_scheduler(
+        num_echo_weight, exp_weight, tuner_weight,
+        coef, score_thres, iterations
+    )
+
+    return {
+        "thresholds": [
+            scheduler.level_5_9,
+            scheduler.level_10_14,
+            scheduler.level_15_19,
+            scheduler.level_20_24
+        ]
+    }
+
 @app.post("/api/upgrade_echo")
 async def upgrade_echo_endpoint(profile_data: dict):
     # Reset cancellation flag at the start of a new task

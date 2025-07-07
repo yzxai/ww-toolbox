@@ -39,11 +39,17 @@ async function initializePage1() {
     let history = [];
     let nextHistoryId = 0;
     let schedulerChart;
+    let weightChart;
     let briefAnalysisProb = 0.0;
     let scannedProfiles = [
     ];
     let isWorking = false;
     let historySortBy = 'exp'; // 'exp' or 'tuner'
+    let resourceWeights = {
+        num_echo: 1.0,
+        exp: 1.0,
+        tuner: 1.0
+    };
 
     // sort toggle icons
     const sortExpIcon = document.getElementById('sort-exp');
@@ -60,6 +66,7 @@ async function initializePage1() {
         document.getElementById('scheduler-input-3'),
     ];
     const examplePopup = document.getElementById('example-profile-popup');
+    const weightPopup = document.getElementById('weight-popup');
     let hoverTimeout;
     const indexToLevel = [5, 10, 15, 20];
 
@@ -681,6 +688,288 @@ async function initializePage1() {
         }
     }
 
+    function initializeWeightChart() {
+        const chart = document.getElementById('weight-chart');
+        const centerX = 150;
+        const centerY = 150;
+        const radius = 100;
+        const innerRadius = 30;
+        
+        let isDragging = false;
+        let dragBoundaryIndex = -1;
+        let dragStartAngle = 0;
+        let dragStartWeights = {};
+        
+        function normalizeWeights() {
+            const total = resourceWeights.num_echo + resourceWeights.exp + resourceWeights.tuner;
+            if (total > 0) {
+                resourceWeights.num_echo /= total;
+                resourceWeights.exp /= total;
+                resourceWeights.tuner /= total;
+            }
+        }
+        
+        function draw() {
+            chart.innerHTML = '';
+            
+            // Add gradient definitions
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const gradients = [
+                { id: 'grad1', colors: ['#4facfe', '#00f2fe'] },
+                { id: 'grad2', colors: ['#f093fb', '#f5576c'] },
+                { id: 'grad3', colors: ['#ffecd2', '#fcb69f'] }
+            ];
+            
+            gradients.forEach(grad => {
+                const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradient.setAttribute('id', grad.id);
+                gradient.setAttribute('x1', '0%');
+                gradient.setAttribute('y1', '0%');
+                gradient.setAttribute('x2', '100%');
+                gradient.setAttribute('y2', '100%');
+                
+                const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop1.setAttribute('offset', '0%');
+                stop1.setAttribute('stop-color', grad.colors[0]);
+                
+                const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                stop2.setAttribute('offset', '100%');
+                stop2.setAttribute('stop-color', grad.colors[1]);
+                
+                gradient.appendChild(stop1);
+                gradient.appendChild(stop2);
+                defs.appendChild(gradient);
+            });
+            
+            // Add filter for glow effect
+            const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+            filter.setAttribute('id', 'glow');
+            filter.setAttribute('x', '-50%');
+            filter.setAttribute('y', '-50%');
+            filter.setAttribute('width', '200%');
+            filter.setAttribute('height', '200%');
+            
+            const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+            feGaussianBlur.setAttribute('stdDeviation', '3');
+            feGaussianBlur.setAttribute('result', 'coloredBlur');
+            
+            const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+            const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+            feMergeNode1.setAttribute('in', 'coloredBlur');
+            const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+            feMergeNode2.setAttribute('in', 'SourceGraphic');
+            
+            feMerge.appendChild(feMergeNode1);
+            feMerge.appendChild(feMergeNode2);
+            filter.appendChild(feGaussianBlur);
+            filter.appendChild(feMerge);
+            defs.appendChild(filter);
+            
+            chart.appendChild(defs);
+            
+            normalizeWeights();
+            const weights = [resourceWeights.num_echo, resourceWeights.exp, resourceWeights.tuner];
+            const fillColors = ['url(#grad1)', 'url(#grad2)', 'url(#grad3)'];
+            const labels = ['声骸数量', '经验值', '调谐器'];
+            
+            let currentAngle = -Math.PI / 2; // Start from top
+            
+            weights.forEach((weight, index) => {
+                const angle = weight * 2 * Math.PI;
+                const endAngle = currentAngle + angle;
+                
+                // Create donut path
+                const largeArcFlag = angle > Math.PI ? 1 : 0;
+                const x1 = centerX + radius * Math.cos(currentAngle);
+                const y1 = centerY + radius * Math.sin(currentAngle);
+                const x2 = centerX + radius * Math.cos(endAngle);
+                const y2 = centerY + radius * Math.sin(endAngle);
+                const x3 = centerX + innerRadius * Math.cos(endAngle);
+                const y3 = centerY + innerRadius * Math.sin(endAngle);
+                const x4 = centerX + innerRadius * Math.cos(currentAngle);
+                const y4 = centerY + innerRadius * Math.sin(currentAngle);
+                
+                const pathData = [
+                    `M ${x1} ${y1}`,
+                    `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                    `L ${x3} ${y3}`,
+                    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4}`,
+                    'Z'
+                ].join(' ');
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', pathData);
+                path.setAttribute('fill', fillColors[index]);
+                path.setAttribute('stroke', 'rgba(255, 255, 255, 0.3)');
+                path.setAttribute('stroke-width', '2');
+                path.style.cursor = 'pointer';
+                path.style.transition = 'all 0.3s ease';
+                path.setAttribute('data-segment', index);
+                
+                // Add hover effect
+                path.addEventListener('mouseenter', () => {
+                    path.setAttribute('filter', 'url(#glow)');
+                    path.setAttribute('transform', `scale(1.05)`);
+                    path.setAttribute('transform-origin', `${centerX} ${centerY}`);
+                });
+                path.addEventListener('mouseleave', () => {
+                    path.removeAttribute('filter');
+                    path.removeAttribute('transform');
+                });
+                
+                chart.appendChild(path);
+                
+                // Add label
+                const labelAngle = currentAngle + angle / 2;
+                const labelRadius = (radius + innerRadius) / 2;
+                const labelX = centerX + labelRadius * Math.cos(labelAngle);
+                const labelY = centerY + labelRadius * Math.sin(labelAngle);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', labelX);
+                text.setAttribute('y', labelY - 8);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '14');
+                text.setAttribute('font-weight', '600');
+                text.setAttribute('text-shadow', '0 2px 4px rgba(0,0,0,0.5)');
+                text.textContent = labels[index];
+                
+                const percentText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                percentText.setAttribute('x', labelX);
+                percentText.setAttribute('y', labelY + 8);
+                percentText.setAttribute('text-anchor', 'middle');
+                percentText.setAttribute('dominant-baseline', 'middle');
+                percentText.setAttribute('fill', 'rgba(255, 255, 255, 0.9)');
+                percentText.setAttribute('font-size', '12');
+                percentText.setAttribute('font-weight', '500');
+                percentText.textContent = `${(weight * 100).toFixed(1)}%`;
+                
+                chart.appendChild(text);
+                chart.appendChild(percentText);
+                
+                currentAngle = endAngle;
+            });
+            
+            // Add center circle
+            const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            centerCircle.setAttribute('cx', centerX);
+            centerCircle.setAttribute('cy', centerY);
+            centerCircle.setAttribute('r', innerRadius);
+            centerCircle.setAttribute('fill', 'rgba(255, 255, 255, 0.1)');
+            centerCircle.setAttribute('stroke', 'rgba(255, 255, 255, 0.3)');
+            centerCircle.setAttribute('stroke-width', '2');
+            chart.appendChild(centerCircle);
+        }
+        
+        function getAngleFromPoint(x, y) {
+            const dx = x - centerX;
+            const dy = y - centerY;
+            let angle = Math.atan2(dy, dx);
+            // Normalize to 0-2π range
+            if (angle < 0) angle += 2 * Math.PI;
+            // Adjust for starting from top (-π/2)
+            angle = (angle + Math.PI / 2) % (2 * Math.PI);
+            return angle;
+        }
+        
+        function findNearestBoundary(angle) {
+            normalizeWeights();
+            const echoAngle = resourceWeights.num_echo * 2 * Math.PI;
+            const expAngle = echoAngle + resourceWeights.exp * 2 * Math.PI;
+            
+            const boundaries = [echoAngle, expAngle, 2 * Math.PI];
+            let nearestIndex = -1;
+            let minDistance = Infinity;
+            
+            boundaries.forEach((boundary, index) => {
+                const distance = Math.min(
+                    Math.abs(angle - boundary),
+                    Math.abs(angle - boundary + 2 * Math.PI),
+                    Math.abs(angle - boundary - 2 * Math.PI)
+                );
+                if (distance < minDistance && distance < 0.3) { // 0.3 radians threshold
+                    minDistance = distance;
+                    nearestIndex = index;
+                }
+            });
+            
+            return nearestIndex;
+        }
+        
+        chart.addEventListener('mousedown', (e) => {
+            const rect = chart.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+            
+            // Only allow dragging near the boundary
+            if (distance > innerRadius + 10 && distance < radius + 10) {
+                const angle = getAngleFromPoint(x, y);
+                const boundaryIndex = findNearestBoundary(angle);
+                
+                if (boundaryIndex !== -1) {
+                    isDragging = true;
+                    dragBoundaryIndex = boundaryIndex;
+                    dragStartAngle = angle;
+                    dragStartWeights = { ...resourceWeights };
+                    chart.classList.add('grabbing');
+                    e.preventDefault();
+                }
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging || dragBoundaryIndex === -1) return;
+            
+            const rect = chart.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const currentAngle = getAngleFromPoint(x, y);
+            
+            const angleDiff = currentAngle - dragStartAngle;
+            const percentageDiff = (angleDiff / (2 * Math.PI)) * 100;
+            
+            // Apply constraints and adjust weights
+            const newWeights = { ...dragStartWeights };
+            
+            if (dragBoundaryIndex === 0) {
+                // Boundary between echo and exp
+                newWeights.num_echo = Math.max(0.01, Math.min(0.98, dragStartWeights.num_echo + percentageDiff / 100));
+                newWeights.exp = Math.max(0.01, Math.min(0.98, dragStartWeights.exp - percentageDiff / 100));
+            } else if (dragBoundaryIndex === 1) {
+                // Boundary between exp and tuner
+                newWeights.exp = Math.max(0.01, Math.min(0.98, dragStartWeights.exp + percentageDiff / 100));
+                newWeights.tuner = Math.max(0.01, Math.min(0.98, dragStartWeights.tuner - percentageDiff / 100));
+            } else if (dragBoundaryIndex === 2) {
+                // Boundary between tuner and echo
+                newWeights.tuner = Math.max(0.01, Math.min(0.98, dragStartWeights.tuner + percentageDiff / 100));
+                newWeights.num_echo = Math.max(0.01, Math.min(0.98, dragStartWeights.num_echo - percentageDiff / 100));
+            }
+            
+            // Normalize to ensure sum is 1
+            const total = newWeights.num_echo + newWeights.exp + newWeights.tuner;
+            resourceWeights.num_echo = newWeights.num_echo / total;
+            resourceWeights.exp = newWeights.exp / total;
+            resourceWeights.tuner = newWeights.tuner / total;
+            
+            draw();
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                dragBoundaryIndex = -1;
+                chart.classList.remove('grabbing');
+            }
+        });
+        
+        draw();
+        
+        return { draw };
+    }
+
     function renderDetailedSettings() {
         const container = document.getElementById('detailed-settings-container');
         container.innerHTML = '';
@@ -975,6 +1264,7 @@ async function initializePage1() {
             // A one-time initialization
             if (!schedulerPanel.dataset.initialized) {
                 schedulerChart = initializeScheduler();
+                weightChart = initializeWeightChart();
                 schedulerPanel.dataset.initialized = 'true';
             }
         }
@@ -1436,6 +1726,104 @@ async function initializePage1() {
             schedulerChart.updateAllPoints([newThreshold, newThreshold, newThreshold, newThreshold]);
         }
     });
+
+    const optimalSchedulerBtn = document.getElementById('optimal-scheduler-btn');
+    const weightPopupOverlay = document.getElementById('weight-popup-overlay');
+
+    // Show weight popup on button click
+    optimalSchedulerBtn.addEventListener('click', () => {
+        weightPopup.classList.add('visible');
+        weightPopupOverlay.classList.add('visible');
+    });
+
+    // Hide weight popup when clicking overlay
+    weightPopupOverlay.addEventListener('click', () => {
+        weightPopup.classList.remove('visible');
+        weightPopupOverlay.classList.remove('visible');
+    });
+
+    // Prevent popup from closing when clicking inside it
+    weightPopup.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    // Add calculate button to the popup
+    const calculateBtn = document.createElement('button');
+    calculateBtn.textContent = '计算最优策略';
+    calculateBtn.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        padding: 12px 30px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    `;
+    
+    calculateBtn.addEventListener('mouseenter', () => {
+        calculateBtn.style.transform = 'translateX(-50%) translateY(-2px)';
+        calculateBtn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.3)';
+    });
+    
+    calculateBtn.addEventListener('mouseleave', () => {
+        calculateBtn.style.transform = 'translateX(-50%) translateY(0)';
+        calculateBtn.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+    });
+
+    calculateBtn.addEventListener('click', async () => {
+        calculateBtn.disabled = true;
+        const originalContent = calculateBtn.innerHTML;
+        calculateBtn.innerHTML = `<i class="mdi mdi-loading mdi-spin"></i> 计算中...`;
+
+        const scoreThres = parseFloat(calculateTotalScore());
+        const payload = {
+            num_echo_weight: resourceWeights.num_echo,
+            exp_weight: resourceWeights.exp,
+            tuner_weight: resourceWeights.tuner,
+            coef: userSelection.entry_weights,
+            score_thres: scoreThres,
+            iterations: 20
+        };
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/get_optimal_scheduler`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            // Update the current scheduler with optimal values
+            userSelection.discard_scheduler = result.thresholds;
+            if (schedulerChart) {
+                schedulerChart.updateAllPoints(result.thresholds);
+            }
+
+            // Hide the weight popup
+            weightPopup.classList.remove('visible');
+            weightPopupOverlay.classList.remove('visible');
+
+        } catch (error) {
+            console.error("Error calculating optimal scheduler:", error);
+        } finally {
+            calculateBtn.disabled = false;
+            calculateBtn.innerHTML = originalContent;
+        }
+    });
+
+    weightPopup.appendChild(calculateBtn);
 
     function updateWorkButtonState() {
         const applyFilterBtn = document.getElementById('apply-filter-btn');

@@ -8,6 +8,7 @@ let mainWindow;
 let pythonProcess;
 
 function createWindow() {
+  app.commandLine.appendSwitch('--no-sandbox');
   const iconPath = !app.isPackaged
     ? path.join(__dirname, '..', 'assets', 'icon.png') 
     : path.join(process.resourcesPath, 'assets', 'icon.png');

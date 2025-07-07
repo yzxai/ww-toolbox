@@ -324,6 +324,41 @@ def get_example_profile_above_threshold(level: int, prob: float, coef: EntryCoef
         return None
     return EchoProfile.from_cpp_profile(cpp_profile)
 
+def get_optimal_scheduler(
+    num_echo_weight: float,
+    exp_weight: float,
+    tuner_weight: float,
+    coef: EntryCoef,
+    score_thres: float,
+    stop_thres: float = 1e-2
+) -> DiscardScheduler:
+    """Calculate optimal discard scheduler based on resource weights.
+    
+    Args:
+        num_echo_weight: Weight for number of echoes used
+        exp_weight: Weight for experience wasted
+        tuner_weight: Weight for tuners wasted
+        coef: Entry coefficients
+        score_thres: Score threshold to achieve
+        stop_thres: Convergence threshold for optimization
+        
+    Returns:
+        DiscardScheduler: Optimal discard thresholds
+    """
+    cpp_scheduler = profile_cpp.get_optimal_scheduler(
+        num_echo_weight, exp_weight, tuner_weight,
+        coef.to_cpp(), score_thres, stat_data, stop_thres
+    )
+    
+    # Convert C++ DiscardScheduler to Python DiscardScheduler
+    scheduler = DiscardScheduler()
+    scheduler.level_5_9 = cpp_scheduler.thresholds[0]
+    scheduler.level_10_14 = cpp_scheduler.thresholds[1]
+    scheduler.level_15_19 = cpp_scheduler.thresholds[2]
+    scheduler.level_20_24 = cpp_scheduler.thresholds[3]
+    
+    return scheduler
+
 def test():
 
     profile = EchoProfile(
