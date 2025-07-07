@@ -856,6 +856,32 @@ body {
     transition: box-shadow 0.3s;
 }
 
+.lock-icon {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.6;
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.lock-icon:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.lock-icon.locked {
+    color: #dc3545;
+    opacity: 1;
+}
+
+.lock-icon.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .setting-row:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }

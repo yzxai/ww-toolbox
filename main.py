@@ -80,6 +80,7 @@ async def get_entry_coef(character_name: str):
 async def get_brief_analysis_endpoint(data: dict):
     coef_data = data.get("coef", {})
     score_thres = data.get("score_thres", 0.0)
+    locked_keys = data.get("locked_keys", [])
 
     coef = EntryCoef()
     for key, value in coef_data.items():
@@ -88,7 +89,7 @@ async def get_brief_analysis_endpoint(data: dict):
     
     profile = EchoProfile(level=0)
     
-    result = await api.get_brief_analysis(profile, coef, score_thres)
+    result = await api.get_brief_analysis(profile, coef, score_thres, locked_keys)
     return result
 
 @app.post("/api/get_full_analysis")
@@ -97,6 +98,7 @@ async def get_full_analysis_endpoint(data: dict):
     score_thres = data.get("score_thres", 0.0)
     scheduler_thresholds = data.get("scheduler", [])
     profile_data = data.get("profile", None)
+    locked_keys = data.get("locked_keys", [])
 
     coef = EntryCoef()
     for key, value in coef_data_dict.items():
@@ -116,7 +118,7 @@ async def get_full_analysis_endpoint(data: dict):
         scheduler.level_15_19 = scheduler_thresholds[2]
         scheduler.level_20_24 = scheduler_thresholds[3]
 
-    result = await api.get_analysis(profile, coef, score_thres, scheduler)
+    result = await api.get_analysis(profile, coef, score_thres, scheduler, locked_keys)
 
     if result.expected_total_wasted_exp == float('inf'):
         result.expected_total_wasted_exp = -1
@@ -132,6 +134,7 @@ async def get_example_profile_endpoint(data: dict):
     prob = data.get("prob")
     coef_data = data.get("coef", {})
     score_thres = data.get("score_thres", 0.0)
+    locked_keys = data.get("locked_keys", [])
 
     if level is None or prob is None:
         from fastapi import HTTPException
@@ -142,12 +145,12 @@ async def get_example_profile_endpoint(data: dict):
         if hasattr(coef, key):
             setattr(coef, key, value)
     
-    profile = await api.get_example_profile(level, prob, coef, score_thres)
+    profile = await api.get_example_profile(level, prob, coef, score_thres, locked_keys)
     
     if profile is None:
         return None
         
-    actual_prob = profile.prob_above_score(coef, score_thres)
+    actual_prob = profile.prob_above_score(coef, score_thres, locked_keys)
     
     return {
         "profile": profile,
@@ -161,6 +164,7 @@ async def get_optimal_scheduler_endpoint(data: dict):
     tuner_weight = data.get("tuner_weight", 1.0)
     coef_data_dict = data.get("coef", {})
     score_thres = data.get("score_thres", 0.0)
+    locked_keys = data.get("locked_keys", [])
     iterations = data.get("iterations", 20)
 
     coef = EntryCoef()
@@ -170,7 +174,7 @@ async def get_optimal_scheduler_endpoint(data: dict):
 
     scheduler = await api.get_optimal_scheduler(
         num_echo_weight, exp_weight, tuner_weight,
-        coef, score_thres, iterations
+        coef, score_thres, locked_keys, iterations
     )
 
     return {

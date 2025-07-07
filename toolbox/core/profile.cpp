@@ -17,8 +17,10 @@ struct EntryCoef {
     bool operator==(const EntryCoef& other) const {
         if (values.size() != other.values.size()) return false;
         for (const auto& kv : values) {
+            auto it = other.values.find(kv.first);
+            if (it == other.values.end()) return false;
             double v1 = std::round(kv.second * 10) / 10.0;
-            double v2 = std::round(other.values.at(kv.first) * 10) / 10.0;
+            double v2 = std::round(it->second * 10) / 10.0;
             if (std::abs(v1 - v2) > 1e-6) return false;
         }
         return true;
@@ -33,9 +35,12 @@ struct EchoProfile {
 
     bool operator==(const EchoProfile& other) const {
         if (level != other.level) return false;
+        if (values.size() != other.values.size()) return false;
         for (const auto& kv : values) {
+            auto it = other.values.find(kv.first);
+            if (it == other.values.end()) return false;
             double v1 = std::round(kv.second * 10) / 10.0;
-            double v2 = std::round(other.values.at(kv.first) * 10) / 10.0;
+            double v2 = std::round(it->second * 10) / 10.0;
             if (std::abs(v1 - v2) > 1e-6) return false;
         }
         return true;
@@ -104,15 +109,19 @@ struct DiscardScheduler {
     }
 };
 
+typedef std::vector<std::string> LockedKeys;
+
 struct CacheKey {
     EntryCoef coef;
     double score_thres;
     DiscardScheduler scheduler;
+    LockedKeys locked_keys;
 
     bool operator==(const CacheKey& other) const {
         return coef == other.coef && 
                 std::abs(score_thres - other.score_thres) < 1e-6 &&
-                scheduler == other.scheduler;
+                scheduler == other.scheduler &&
+                locked_keys == other.locked_keys;
     }
 };
 
@@ -127,6 +136,9 @@ struct CacheKeyHash {
         h ^= std::hash<int>()(int(std::round(key.score_thres * 10)));
         for (const auto& threshold : key.scheduler.thresholds) {
             h ^= std::hash<int>()(int(std::round(threshold * 1000)));
+        }
+        for (const auto& locked_key : key.locked_keys) {
+            h ^= std::hash<std::string>()(locked_key) + 0x9e3779b9 + (h << 6) + (h >> 2);
         }
         return h;
     }
@@ -247,10 +259,21 @@ StatDataCpp pre_process_stat_data(const EntryCoef& coef, const py::dict& stat_da
     return stat_data;
 }
 
+bool satisfies_locked_keys(const EchoProfile& profile, const LockedKeys& locked_keys) {
+    for (const auto& key : locked_keys) {
+        auto it = profile.values.find(key);
+        if (it == profile.values.end() || std::abs(it->second) < 1e-5) {
+            return false;
+        }
+    }
+    return true;
+}
+
 double _prob_above_score(
     const MemoKey& profile_key,
     const EntryCoef& coef,
     double threshold,
+    const LockedKeys& locked_keys,
     const StatDataCpp& stat_data
 ) {
     std::vector<std::string> keys;
@@ -282,7 +305,9 @@ double _prob_above_score(
             for (ScoreMap::const_iterator it = dp[i][j].begin(); it != dp[i][j].end(); ++it) {
                 double score = it->first;
                 double prob = it->second;
-                dp[i + 1][j][score] += prob * (1 - appear_prob);
+                if (std::find(locked_keys.begin(), locked_keys.end(), key) == locked_keys.end()) {
+                    dp[i + 1][j][score] += prob * (1 - appear_prob);
+                }
                 if (j > 0 && it_dist != stat_data.end()) {
                     const auto& dist = it_dist->second;
                     for (const auto& entry : dist) {
@@ -310,10 +335,11 @@ double prob_above_score(
     const EchoProfile& profile,
     const EntryCoef& coef,
     double threshold,
+    const LockedKeys& locked_keys,
     const py::dict& stat_data_py
 ) {
     StatDataCpp stat_data = pre_process_stat_data(coef, stat_data_py);
-    return _prob_above_score(get_memo_key(profile, coef), coef, threshold, stat_data);
+    return _prob_above_score(get_memo_key(profile, coef), coef, threshold, locked_keys, stat_data);
 }
 
 static std::vector<int> echo_exp = {0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
@@ -323,11 +349,12 @@ Result _get_statistics_internal(
     const EchoProfile& profile,
     const EntryCoef& coef,
     double score_thres,
+    const LockedKeys& locked_keys,
     const DiscardScheduler& scheduler,
     const StatDataCpp& stat_data
 ) {
     static LRUCache<CacheKey, std::unordered_map<MemoKey, Result>, CacheKeyHash> waste_exp_cache(20);
-    CacheKey current_key{coef, score_thres, scheduler};
+    CacheKey current_key{coef, score_thres, scheduler, locked_keys};
 
     auto& stored_expectations = waste_exp_cache[current_key];
 
@@ -339,7 +366,7 @@ Result _get_statistics_internal(
         auto it = stored_expectations.find(key);
         if (it != stored_expectations.end()) return it->second;
 
-        if (score >= score_thres) {
+        if (score >= score_thres && satisfies_locked_keys(p, locked_keys)) {
             return stored_expectations[key] = Result(1.0, 0.0, 0.0);
         }
 
@@ -347,7 +374,7 @@ Result _get_statistics_internal(
             return stored_expectations[key] = Result(0.0, echo_exp[25], 50);
         }
 
-        double prob = _prob_above_score(get_memo_key(p, coef), coef, score_thres, stat_data);
+        double prob = _prob_above_score(get_memo_key(p, coef), coef, score_thres, locked_keys, stat_data);
         double discard_thres = scheduler.get_threshold_for_level(p.level);
         if (prob < discard_thres) {
             return stored_expectations[key] = Result(0.0, echo_exp[p.level], p.level / 5 * 10);
@@ -393,11 +420,12 @@ Result get_statistics(
     const EchoProfile& profile,
     const EntryCoef& coef,
     double score_thres,
+    const LockedKeys& locked_keys,
     const DiscardScheduler& scheduler,
     const py::dict& stat_data_py
 ) {
     StatDataCpp stat_data = pre_process_stat_data(coef, stat_data_py);
-    return _get_statistics_internal(profile, coef, score_thres, scheduler, stat_data);
+    return _get_statistics_internal(profile, coef, score_thres, locked_keys, scheduler, stat_data);
 }
 
 EchoProfile _get_example_profile_above_threshold_internal(
@@ -405,6 +433,7 @@ EchoProfile _get_example_profile_above_threshold_internal(
     double prob_above_threshold,
     const EntryCoef& coef, 
     double score_thres,
+    const LockedKeys& locked_keys,
     const StatDataCpp& stat_data
 ) {
     static std::map<double, EchoProfile> example_profiles[5];
@@ -430,7 +459,7 @@ EchoProfile _get_example_profile_above_threshold_internal(
         return result;
     };
 
-    CacheKey key{coef, score_thres, DiscardScheduler()};
+    CacheKey key{coef, score_thres, DiscardScheduler(), locked_keys};
 
     if (!last_key || !(*last_key == key)) {
         last_key = key;
@@ -468,7 +497,7 @@ EchoProfile _get_example_profile_above_threshold_internal(
     double min_prob = 2.0;
     EchoProfile best_profile;
     for (const auto& p : example_profiles[level / 5]) {
-        double prob = _prob_above_score(get_memo_key(p.second, coef), coef, score_thres, stat_data);
+        double prob = _prob_above_score(get_memo_key(p.second, coef), coef, score_thres, locked_keys, stat_data);
         if (prob >= prob_above_threshold && prob < min_prob) {
             min_prob = prob;
             best_profile = p.second;
@@ -483,10 +512,11 @@ EchoProfile get_example_profile_above_threshold(
     double prob_above_threshold,
     const EntryCoef& coef, 
     double score_thres,
+    const LockedKeys& locked_keys,
     const py::dict& stat_data_py
 ) {
     StatDataCpp stat_data = pre_process_stat_data(coef, stat_data_py);
-    return _get_example_profile_above_threshold_internal(level, prob_above_threshold, coef, score_thres, stat_data);
+    return _get_example_profile_above_threshold_internal(level, prob_above_threshold, coef, score_thres, locked_keys, stat_data);
 }
 
 DiscardScheduler _get_optimal_scheduler_internal(
@@ -495,13 +525,14 @@ DiscardScheduler _get_optimal_scheduler_internal(
     double tuner_weight,
     const EntryCoef& coef,
     double score_thres,
+    const LockedKeys& locked_keys,
     const StatDataCpp& stat_data,
     int iterations = 20
 ) {
     double sum_weights = num_echo_weight + exp_weight + tuner_weight;
     num_echo_weight /= sum_weights, exp_weight /= sum_weights, tuner_weight /= sum_weights;
 
-    Result default_result = _get_statistics_internal(EchoProfile(), coef, score_thres, DiscardScheduler(), stat_data);
+    Result default_result = _get_statistics_internal(EchoProfile(), coef, score_thres, locked_keys, DiscardScheduler(), stat_data);
 
     struct Resource {
         double num_echo, exp, tuner;
@@ -544,7 +575,7 @@ DiscardScheduler _get_optimal_scheduler_internal(
         std::unordered_map<MemoKey, Resource> resource_cache;
         std::function<Resource(const EchoProfile&)> solve = [&](const EchoProfile& profile) -> Resource {
             double score = get_score(profile, coef);
-            if (score >= score_thres) return Resource(0.0, 0.0, 0.0);
+            if (score >= score_thres && satisfies_locked_keys(profile, locked_keys)) return Resource(0.0, 0.0, 0.0);
             if (profile.level == 25) return current_resource + Resource(1.0, 0.0, 0.0);
 
             MemoKey key = get_memo_key(profile, coef);
@@ -585,20 +616,19 @@ DiscardScheduler _get_optimal_scheduler_internal(
         };
 
         Resource resource_after_iterate = solve(EchoProfile());
-        std::cout << "solve: " << get_resource_score(resource_after_iterate) << ' ' << get_resource_score(current_resource) << std::endl;
         if (get_resource_score(resource_after_iterate) >= get_resource_score(current_resource)) {
             lower_bound = current_resource;
         } else {
             upper_bound = current_resource;
         }
-        if (i >= iterations) current_resource = current_resource + (resource_after_iterate - current_resource) * 20;
+        if (i >= iterations) current_resource = current_resource + (resource_after_iterate - current_resource) * 10;
     }
 
     DiscardScheduler scheduler(std::vector<double>(4, 1.0));
     for (auto& [key, discard] : strategies) if (!discard) {
-        if (key.level <= 20) {
-            double prob = _prob_above_score(key, coef, score_thres, stat_data);
-            scheduler.thresholds[key.level / 5] = std::min(scheduler.thresholds[key.level / 5], prob);
+        if (5 <= key.level && key.level <= 20) {
+            double prob = _prob_above_score(key, coef, score_thres, locked_keys, stat_data);
+            scheduler.thresholds[key.level / 5 - 1] = std::min(scheduler.thresholds[key.level / 5 - 1], prob);
         }
     }
 
@@ -611,11 +641,12 @@ DiscardScheduler get_optimal_scheduler(
     double tuner_weight,
     const EntryCoef& coef,
     double score_thres,
+    const LockedKeys& locked_keys,
     const py::dict& stat_data_py,
     int iterations = 20
 ) {
     StatDataCpp stat_data = pre_process_stat_data(coef, stat_data_py);
-    return _get_optimal_scheduler_internal(num_echo_weight, exp_weight, tuner_weight, coef, score_thres, stat_data, iterations);
+    return _get_optimal_scheduler_internal(num_echo_weight, exp_weight, tuner_weight, coef, score_thres, locked_keys, stat_data, iterations);
 }
 
 PYBIND11_MODULE(profile_cpp, m) {
@@ -643,11 +674,11 @@ PYBIND11_MODULE(profile_cpp, m) {
         .def_readwrite("expected_wasted_tuner", &Result::expected_wasted_tuner);
 
     m.def("prob_above_score", &prob_above_score, "C++ version of prob_above_score",
-        py::arg("profile"), py::arg("coef"), py::arg("threshold"), py::arg("stat_data"));
+        py::arg("profile"), py::arg("coef"), py::arg("threshold"), py::arg("locked_keys"), py::arg("stat_data"));
     m.def("get_statistics", &get_statistics, "C++ version of get_statistics",
-        py::arg("profile"), py::arg("coef"), py::arg("score_thres"), py::arg("scheduler"), py::arg("stat_data"));
+        py::arg("profile"), py::arg("coef"), py::arg("score_thres"), py::arg("locked_keys"), py::arg("scheduler"), py::arg("stat_data"));
     m.def("get_example_profile_above_threshold", &get_example_profile_above_threshold, "Get an example profile with a similar probability to reach the threshold",
-        py::arg("level"), py::arg("prob_above_threshold"), py::arg("coef"), py::arg("score_thres"), py::arg("stat_data"));
+        py::arg("level"), py::arg("prob_above_threshold"), py::arg("coef"), py::arg("score_thres"), py::arg("locked_keys"), py::arg("stat_data"));
     m.def("get_optimal_scheduler", &get_optimal_scheduler, "C++ version of get_optimal_scheduler",
-        py::arg("num_echo_weight"), py::arg("exp_weight"), py::arg("tuner_weight"), py::arg("coef"), py::arg("score_thres"), py::arg("stat_data"), py::arg("stop_thres")=1e-2);
+        py::arg("num_echo_weight"), py::arg("exp_weight"), py::arg("tuner_weight"), py::arg("coef"), py::arg("score_thres"), py::arg("locked_keys"), py::arg("stat_data"), py::arg("iterations")=20);
 }

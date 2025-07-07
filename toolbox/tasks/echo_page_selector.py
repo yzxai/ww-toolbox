@@ -60,7 +60,7 @@ class EchoPageSelector(EchoTask):
 
             pattern = filter.suit
             for rare_char in rare_chars:
-                pattern = pattern.replace(rare_char, ".?")
+                pattern = pattern.replace(rare_char, ".")
 
             if len(ocr_pattern(_screen_shot, pattern)) == 0:
                 time.sleep(0.2)

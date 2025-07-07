@@ -91,7 +91,8 @@ async function initializePage1() {
                     level: indexToLevel[index],
                     prob: prob,
                     coef: userSelection.entry_weights,
-                    score_thres: parseFloat(calculateTotalScore())
+                    score_thres: parseFloat(calculateTotalScore()),
+                    locked_keys: userSelection.locked_keys
                 };
 
                 try {
@@ -136,6 +137,7 @@ async function initializePage1() {
         echo: null,
         entry_weights: {},
         target_entries: {},
+        locked_keys: [],
         discard_scheduler: [0.0, 0.0, 0.0, 0.0]
     };
 
@@ -395,7 +397,8 @@ async function initializePage1() {
                 },
                 body: JSON.stringify({
                     coef: userSelection.entry_weights,
-                    score_thres: scoreThres
+                    score_thres: scoreThres,
+                    locked_keys: userSelection.locked_keys
                 })
             });
     
@@ -689,285 +692,276 @@ async function initializePage1() {
     }
 
     function initializeWeightChart() {
-        const chart = document.getElementById('weight-chart');
-        const centerX = 150;
-        const centerY = 150;
-        const radius = 100;
-        const innerRadius = 30;
+        const weightPopup = document.getElementById('weight-popup');
+        
+        const oldChartContainer = document.getElementById('weight-chart-container');
+        if (oldChartContainer) oldChartContainer.remove();
+    
+        const wrapper = document.createElement('div');
+        wrapper.id = 'weight-chart-container';
+        wrapper.style.cssText = 'display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 20px 70px; box-sizing: border-box; gap: 30px; position: relative;';
+    
+        const chartContainer = document.createElement('div');
+        const svgChart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgChart.id = 'weight-chart';
+        svgChart.setAttribute('width', '300');
+        svgChart.setAttribute('height', '300');
+        svgChart.setAttribute('viewBox', '0 0 300 300');
+        chartContainer.appendChild(svgChart);
+    
+        const slidersContainer = document.createElement('div');
+        slidersContainer.style.cssText = 'display: flex; flex-direction: column; gap: 20px; width: 200px;';
+    
+        ['num_echo', 'exp', 'tuner'].forEach(key => {
+            const labels = { num_echo: '声骸数量', exp: '经验值', tuner: '调谐器' };
+            const group = document.createElement('div');
+            group.style.cssText = 'display: flex; flex-direction: column;';
+            const labelRow = document.createElement('div');
+            labelRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;';
+            const label = document.createElement('label');
+            label.textContent = labels[key];
+            label.style.cssText = 'color: #E0E0E0; font-size: 14px; font-weight: 500;';
+            const valueSpan = document.createElement('span');
+            valueSpan.id = `weight-value-${key}`;
+            valueSpan.style.cssText = 'color: #FFFFFF; font-size: 14px; font-weight: 600;';
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.id = `weight-slider-${key}`;
+            slider.min = 0;
+            slider.max = 1000;
+            slider.className = 'weight-slider';
+            labelRow.append(label, valueSpan);
+            group.append(labelRow, slider);
+            slidersContainer.appendChild(group);
+        });
+    
+        wrapper.append(chartContainer, slidersContainer);
+        weightPopup.prepend(wrapper);
+    
+        const sliders = {
+            num_echo: document.getElementById('weight-slider-num_echo'),
+            exp: document.getElementById('weight-slider-exp'),
+            tuner: document.getElementById('weight-slider-tuner')
+        };
+        const valueSpans = {
+            num_echo: document.getElementById('weight-value-num_echo'),
+            exp: document.getElementById('weight-value-exp'),
+            tuner: document.getElementById('weight-value-tuner')
+        };
+        const keys = ['num_echo', 'exp', 'tuner'];
+        const centerX = 150, centerY = 150, radius = 120, innerRadius = 40;
         
         let isDragging = false;
         let dragBoundaryIndex = -1;
         let dragStartAngle = 0;
         let dragStartWeights = {};
-        
-        function normalizeWeights() {
-            const total = resourceWeights.num_echo + resourceWeights.exp + resourceWeights.tuner;
-            if (total > 0) {
-                resourceWeights.num_echo /= total;
-                resourceWeights.exp /= total;
-                resourceWeights.tuner /= total;
-            }
-        }
-        
+    
         function draw() {
-            chart.innerHTML = '';
+            svgChart.innerHTML = '';
             
-            // Add gradient definitions
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
             const gradients = [
                 { id: 'grad1', colors: ['#4facfe', '#00f2fe'] },
                 { id: 'grad2', colors: ['#f093fb', '#f5576c'] },
                 { id: 'grad3', colors: ['#ffecd2', '#fcb69f'] }
             ];
-            
             gradients.forEach(grad => {
-                const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-                gradient.setAttribute('id', grad.id);
-                gradient.setAttribute('x1', '0%');
-                gradient.setAttribute('y1', '0%');
-                gradient.setAttribute('x2', '100%');
-                gradient.setAttribute('y2', '100%');
-                
-                const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                stop1.setAttribute('offset', '0%');
-                stop1.setAttribute('stop-color', grad.colors[0]);
-                
-                const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-                stop2.setAttribute('offset', '100%');
-                stop2.setAttribute('stop-color', grad.colors[1]);
-                
-                gradient.appendChild(stop1);
-                gradient.appendChild(stop2);
-                defs.appendChild(gradient);
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                g.id = grad.id;
+                g.setAttribute('x1', '0%'); g.setAttribute('y1', '0%');
+                g.setAttribute('x2', '100%'); g.setAttribute('y2', '100%');
+                const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', grad.colors[0]);
+                const s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', grad.colors[1]);
+                g.append(s1, s2); defs.appendChild(g);
             });
-            
-            // Add filter for glow effect
             const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
-            filter.setAttribute('id', 'glow');
-            filter.setAttribute('x', '-50%');
-            filter.setAttribute('y', '-50%');
-            filter.setAttribute('width', '200%');
-            filter.setAttribute('height', '200%');
-            
-            const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
-            feGaussianBlur.setAttribute('stdDeviation', '3');
-            feGaussianBlur.setAttribute('result', 'coloredBlur');
-            
+            filter.id = 'glow';
+            const feBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+            feBlur.setAttribute('stdDeviation', '4'); feBlur.setAttribute('result', 'coloredBlur');
             const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
-            const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
-            feMergeNode1.setAttribute('in', 'coloredBlur');
-            const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
-            feMergeNode2.setAttribute('in', 'SourceGraphic');
-            
-            feMerge.appendChild(feMergeNode1);
-            feMerge.appendChild(feMergeNode2);
-            filter.appendChild(feGaussianBlur);
-            filter.appendChild(feMerge);
+            const n1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+            n1.setAttribute('in', 'coloredBlur');
+            const n2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+            n2.setAttribute('in', 'SourceGraphic');
+            feMerge.append(n1, n2); filter.appendChild(feBlur); filter.appendChild(feMerge);
             defs.appendChild(filter);
-            
-            chart.appendChild(defs);
-            
-            normalizeWeights();
+            svgChart.appendChild(defs);
+    
             const weights = [resourceWeights.num_echo, resourceWeights.exp, resourceWeights.tuner];
             const fillColors = ['url(#grad1)', 'url(#grad2)', 'url(#grad3)'];
             const labels = ['声骸数量', '经验值', '调谐器'];
-            
-            let currentAngle = -Math.PI / 2; // Start from top
-            
+            let currentAngle = -Math.PI / 2;
+    
             weights.forEach((weight, index) => {
+                if (weight < 1e-6) return;
+    
                 const angle = weight * 2 * Math.PI;
-                const endAngle = currentAngle + angle;
-                
-                // Create donut path
-                const largeArcFlag = angle > Math.PI ? 1 : 0;
-                const x1 = centerX + radius * Math.cos(currentAngle);
-                const y1 = centerY + radius * Math.sin(currentAngle);
-                const x2 = centerX + radius * Math.cos(endAngle);
-                const y2 = centerY + radius * Math.sin(endAngle);
-                const x3 = centerX + innerRadius * Math.cos(endAngle);
-                const y3 = centerY + innerRadius * Math.sin(endAngle);
-                const x4 = centerX + innerRadius * Math.cos(currentAngle);
-                const y4 = centerY + innerRadius * Math.sin(currentAngle);
-                
-                const pathData = [
-                    `M ${x1} ${y1}`,
-                    `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                    `L ${x3} ${y3}`,
-                    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4}`,
-                    'Z'
-                ].join(' ');
-                
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('d', pathData);
+    
+                if (Math.abs(weight - 1.0) < 1e-6) {
+                    const d = `M ${centerX} ${centerY - radius} A ${radius} ${radius} 0 1 1 ${centerX-0.01} ${centerY - radius} L ${centerX-0.01} ${centerY-innerRadius} A ${innerRadius} ${innerRadius} 0 1 0 ${centerX} ${centerY-innerRadius} Z`;
+                    path.setAttribute('d', d);
+                } else {
+                    const endAngle = currentAngle + angle;
+                    const largeArc = angle > Math.PI ? 1 : 0;
+                    const x1 = centerX + radius * Math.cos(currentAngle);
+                    const y1 = centerY + radius * Math.sin(currentAngle);
+                    const x2 = centerX + radius * Math.cos(endAngle);
+                    const y2 = centerY + radius * Math.sin(endAngle);
+                    const x3 = centerX + innerRadius * Math.cos(endAngle);
+                    const y3 = centerY + innerRadius * Math.sin(endAngle);
+                    const x4 = centerX + innerRadius * Math.cos(currentAngle);
+                    const y4 = centerY + innerRadius * Math.sin(currentAngle);
+                    path.setAttribute('d', `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`);
+                }
+                
                 path.setAttribute('fill', fillColors[index]);
-                path.setAttribute('stroke', 'rgba(255, 255, 255, 0.3)');
-                path.setAttribute('stroke-width', '2');
                 path.style.cursor = 'pointer';
-                path.style.transition = 'all 0.3s ease';
-                path.setAttribute('data-segment', index);
-                
-                // Add hover effect
-                path.addEventListener('mouseenter', () => {
-                    path.setAttribute('filter', 'url(#glow)');
-                    path.setAttribute('transform', `scale(1.05)`);
-                    path.setAttribute('transform-origin', `${centerX} ${centerY}`);
-                });
-                path.addEventListener('mouseleave', () => {
-                    path.removeAttribute('filter');
-                    path.removeAttribute('transform');
-                });
-                
-                chart.appendChild(path);
-                
-                // Add label
+                path.style.transition = 'transform 0.2s ease-out';
+                path.addEventListener('mouseenter', () => { path.setAttribute('filter', 'url(#glow)'); path.style.transform = `scale(1.03)`; path.style.transformOrigin = 'center'; });
+                path.addEventListener('mouseleave', () => { path.removeAttribute('filter'); path.style.transform = ''; });
+                svgChart.appendChild(path);
+    
                 const labelAngle = currentAngle + angle / 2;
                 const labelRadius = (radius + innerRadius) / 2;
                 const labelX = centerX + labelRadius * Math.cos(labelAngle);
                 const labelY = centerY + labelRadius * Math.sin(labelAngle);
                 
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                text.setAttribute('x', labelX);
-                text.setAttribute('y', labelY - 8);
-                text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('dominant-baseline', 'middle');
-                text.setAttribute('fill', 'white');
-                text.setAttribute('font-size', '14');
-                text.setAttribute('font-weight', '600');
-                text.setAttribute('text-shadow', '0 2px 4px rgba(0,0,0,0.5)');
+                text.setAttribute('x', labelX); text.setAttribute('y', labelY - 8);
+                text.setAttribute('text-anchor', 'middle'); text.setAttribute('dominant-baseline', 'middle');
+                text.style.cssText = 'fill: white; font-size: 16px; font-weight: 600; pointer-events: none;';
                 text.textContent = labels[index];
                 
                 const percentText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                percentText.setAttribute('x', labelX);
-                percentText.setAttribute('y', labelY + 8);
-                percentText.setAttribute('text-anchor', 'middle');
-                percentText.setAttribute('dominant-baseline', 'middle');
-                percentText.setAttribute('fill', 'rgba(255, 255, 255, 0.9)');
-                percentText.setAttribute('font-size', '12');
-                percentText.setAttribute('font-weight', '500');
+                percentText.setAttribute('x', labelX); percentText.setAttribute('y', labelY + 10);
+                percentText.setAttribute('text-anchor', 'middle'); percentText.setAttribute('dominant-baseline', 'middle');
+                percentText.style.cssText = 'fill: rgba(255, 255, 255, 0.9); font-size: 14px; pointer-events: none;';
                 percentText.textContent = `${(weight * 100).toFixed(1)}%`;
                 
-                chart.appendChild(text);
-                chart.appendChild(percentText);
-                
-                currentAngle = endAngle;
+                svgChart.appendChild(text);
+                svgChart.appendChild(percentText);
+    
+                currentAngle += angle;
             });
-            
-            // Add center circle
-            const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            centerCircle.setAttribute('cx', centerX);
-            centerCircle.setAttribute('cy', centerY);
-            centerCircle.setAttribute('r', innerRadius);
-            centerCircle.setAttribute('fill', 'rgba(255, 255, 255, 0.1)');
-            centerCircle.setAttribute('stroke', 'rgba(255, 255, 255, 0.3)');
-            centerCircle.setAttribute('stroke-width', '2');
-            chart.appendChild(centerCircle);
         }
         
+        function updateUI() {
+            const total = keys.reduce((sum, key) => sum + resourceWeights[key], 0);
+            if(total > 0) keys.forEach(key => resourceWeights[key] /= total);
+            
+            keys.forEach(key => {
+                valueSpans[key].textContent = `${(resourceWeights[key] * 100).toFixed(1)}%`;
+                sliders[key].value = Math.round(resourceWeights[key] * 1000);
+            });
+            draw();
+        }
+    
+        function handleSliderInput(changedKey) {
+            const newValue = parseFloat(sliders[changedKey].value) / 1000;
+            const oldValue = resourceWeights[changedKey];
+            const diff = newValue - oldValue;
+            const otherKeys = keys.filter(k => k !== changedKey);
+            const sumOfOthers = otherKeys.reduce((sum, k) => sum + resourceWeights[k], 0);
+    
+            resourceWeights[changedKey] = newValue;
+            if (sumOfOthers > 1e-6) {
+                otherKeys.forEach(key => {
+                    resourceWeights[key] -= diff * (resourceWeights[key] / sumOfOthers);
+                });
+            } else {
+                otherKeys.forEach(key => resourceWeights[key] = (1 - newValue) / 2);
+            }
+            updateUI();
+        }
+    
         function getAngleFromPoint(x, y) {
-            const dx = x - centerX;
-            const dy = y - centerY;
-            let angle = Math.atan2(dy, dx);
-            // Normalize to 0-2π range
-            if (angle < 0) angle += 2 * Math.PI;
-            // Adjust for starting from top (-π/2)
-            angle = (angle + Math.PI / 2) % (2 * Math.PI);
-            return angle;
+            return (Math.atan2(y - centerY, x - centerX) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
         }
-        
-        function findNearestBoundary(angle) {
-            normalizeWeights();
-            const echoAngle = resourceWeights.num_echo * 2 * Math.PI;
-            const expAngle = echoAngle + resourceWeights.exp * 2 * Math.PI;
-            
-            const boundaries = [echoAngle, expAngle, 2 * Math.PI];
-            let nearestIndex = -1;
-            let minDistance = Infinity;
-            
-            boundaries.forEach((boundary, index) => {
-                const distance = Math.min(
-                    Math.abs(angle - boundary),
-                    Math.abs(angle - boundary + 2 * Math.PI),
-                    Math.abs(angle - boundary - 2 * Math.PI)
-                );
-                if (distance < minDistance && distance < 0.3) { // 0.3 radians threshold
-                    minDistance = distance;
-                    nearestIndex = index;
-                }
-            });
-            
-            return nearestIndex;
-        }
-        
-        chart.addEventListener('mousedown', (e) => {
-            const rect = chart.getBoundingClientRect();
+    
+        svgChart.addEventListener('mousedown', (e) => {
+            const rect = svgChart.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
             
-            // Only allow dragging near the boundary
-            if (distance > innerRadius + 10 && distance < radius + 10) {
-                const angle = getAngleFromPoint(x, y);
-                const boundaryIndex = findNearestBoundary(angle);
+            if (distance < innerRadius - 5 || distance > radius + 5) return;
+    
+            dragStartAngle = getAngleFromPoint(x, y);
+            dragStartWeights = JSON.parse(JSON.stringify(resourceWeights));
+            
+            let cumulativeAngle = 0;
+            const boundaries = keys.map(key => {
+                cumulativeAngle += resourceWeights[key] * 2 * Math.PI;
+                return cumulativeAngle;
+            });
+            
+            let minDistance = Infinity;
+            dragBoundaryIndex = -1;
+            boundaries.forEach((boundary, index) => {
+                let dist = Math.abs(dragStartAngle - boundary);
+                if (dist > Math.PI) dist = 2 * Math.PI - dist;
                 
-                if (boundaryIndex !== -1) {
-                    isDragging = true;
-                    dragBoundaryIndex = boundaryIndex;
-                    dragStartAngle = angle;
-                    dragStartWeights = { ...resourceWeights };
-                    chart.classList.add('grabbing');
-                    e.preventDefault();
+                if (dist < minDistance && dist < 0.35) {
+                    minDistance = dist;
+                    dragBoundaryIndex = index;
                 }
+            });
+            if (dragBoundaryIndex !== -1) {
+                isDragging = true;
+                e.preventDefault();
             }
         });
-        
+    
         document.addEventListener('mousemove', (e) => {
-            if (!isDragging || dragBoundaryIndex === -1) return;
-            
-            const rect = chart.getBoundingClientRect();
+            if (!isDragging) return;
+            const rect = svgChart.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             const currentAngle = getAngleFromPoint(x, y);
+    
+            let angleDiff = currentAngle - dragStartAngle;
+            if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
             
-            const angleDiff = currentAngle - dragStartAngle;
-            const percentageDiff = (angleDiff / (2 * Math.PI)) * 100;
+            const percentageDiff = angleDiff / (2 * Math.PI);
             
-            // Apply constraints and adjust weights
-            const newWeights = { ...dragStartWeights };
+            const newWeights = JSON.parse(JSON.stringify(dragStartWeights));
+            const k1_idx = dragBoundaryIndex;
+            const k2_idx = (dragBoundaryIndex - 1 + keys.length) % keys.length;
+            const k1 = keys[k1_idx];
+            const k2 = keys[k2_idx];
+    
+            newWeights[k1] -= percentageDiff;
+            newWeights[k2] += percentageDiff;
             
-            if (dragBoundaryIndex === 0) {
-                // Boundary between echo and exp
-                newWeights.num_echo = Math.max(0.01, Math.min(0.98, dragStartWeights.num_echo + percentageDiff / 100));
-                newWeights.exp = Math.max(0.01, Math.min(0.98, dragStartWeights.exp - percentageDiff / 100));
-            } else if (dragBoundaryIndex === 1) {
-                // Boundary between exp and tuner
-                newWeights.exp = Math.max(0.01, Math.min(0.98, dragStartWeights.exp + percentageDiff / 100));
-                newWeights.tuner = Math.max(0.01, Math.min(0.98, dragStartWeights.tuner - percentageDiff / 100));
-            } else if (dragBoundaryIndex === 2) {
-                // Boundary between tuner and echo
-                newWeights.tuner = Math.max(0.01, Math.min(0.98, dragStartWeights.tuner + percentageDiff / 100));
-                newWeights.num_echo = Math.max(0.01, Math.min(0.98, dragStartWeights.num_echo - percentageDiff / 100));
+            let sum = 0;
+            for(const key of keys) {
+                newWeights[key] = Math.max(0, Math.min(1, newWeights[key]));
+                sum += newWeights[key];
             }
-            
-            // Normalize to ensure sum is 1
-            const total = newWeights.num_echo + newWeights.exp + newWeights.tuner;
-            resourceWeights.num_echo = newWeights.num_echo / total;
-            resourceWeights.exp = newWeights.exp / total;
-            resourceWeights.tuner = newWeights.tuner / total;
-            
-            draw();
+    
+            for(const key of keys) {
+                if (sum > 1e-6) newWeights[key] /= sum;
+            }
+    
+            resourceWeights = newWeights;
+            updateUI();
         });
-        
+    
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
                 dragBoundaryIndex = -1;
-                chart.classList.remove('grabbing');
             }
         });
-        
-        draw();
-        
-        return { draw };
+    
+        keys.forEach(key => sliders[key].addEventListener('input', () => handleSliderInput(key)));
+        updateUI();
+    
+        return { draw: updateUI };
     }
 
     function renderDetailedSettings() {
@@ -987,6 +981,17 @@ async function initializePage1() {
             const row = document.createElement('div');
             row.className = 'setting-row';
 
+            // Add lock icon
+            const lockIcon = document.createElement('i');
+            lockIcon.className = 'mdi mdi-lock-open lock-icon';
+            lockIcon.dataset.key = key;
+            
+            // Check if this key is locked
+            if (userSelection.locked_keys.includes(key)) {
+                lockIcon.classList.remove('mdi-lock-open');
+                lockIcon.classList.add('mdi-lock', 'locked');
+            }
+
             const nameLabel = document.createElement('label');
             nameLabel.className = 'setting-name';
             nameLabel.textContent = entry.name;
@@ -1002,9 +1007,16 @@ async function initializePage1() {
                 if (weight !== 0) {
                     row.classList.add('has-weight');
                     row.classList.remove('is-zero-weight');
+                    // Enable lock icon when weight is not zero
+                    lockIcon.classList.remove('disabled');
                 } else {
                     row.classList.remove('has-weight');
                     row.classList.add('is-zero-weight');
+                    // Disable lock icon when weight is zero and unlock if locked
+                    lockIcon.classList.add('disabled');
+                    if (lockIcon.classList.contains('locked')) {
+                        toggleLock(lockIcon);
+                    }
                 }
             };
             
@@ -1043,8 +1055,68 @@ async function initializePage1() {
 
             slider.addEventListener('input', updateValueLabel);
 
+            // Add lock click handler
+            const toggleLock = (icon) => {
+                const key = icon.dataset.key;
+                // Allow unlocking even if disabled (e.g., when weight is set to 0),
+                // but prevent locking a disabled item.
+                if (icon.classList.contains('disabled') && !icon.classList.contains('locked')) {
+                    return;
+                }
+
+                let lockStateChanged = false;
+
+                if (icon.classList.contains('locked')) {
+                    // UNLOCK
+                    icon.classList.remove('mdi-lock', 'locked');
+                    icon.classList.add('mdi-lock-open');
+                    const index = userSelection.locked_keys.indexOf(key);
+                    if (index > -1) {
+                        userSelection.locked_keys.splice(index, 1);
+                        lockStateChanged = true;
+                    }
+                } else {
+                    // LOCK
+                    // 1. Check against max locked items
+                    if (userSelection.locked_keys.length >= 5) {
+                        console.warn("Cannot lock more than 5 entries.");
+                        return;
+                    }
+
+                    // 2. Ensure weight is not zero
+                    const weight = parseFloat(weightInput.value) || 0;
+                    if (weight === 0) {
+                         console.warn("Cannot lock an entry with zero weight.");
+                         return;
+                    }
+
+                    icon.classList.remove('mdi-lock-open');
+                    icon.classList.add('mdi-lock', 'locked');
+                    if (!userSelection.locked_keys.includes(key)) {
+                        userSelection.locked_keys.push(key);
+                        lockStateChanged = true;
+                    }
+                }
+
+                if (lockStateChanged) {
+                    console.log('Locked keys updated:', userSelection.locked_keys);
+
+                    // Reset full analysis results and clear history
+                    probResult.textContent = 'N/A';
+                    expResult.textContent = 'N/A';
+                    if (tunerResult) tunerResult.textContent = 'N/A';
+                    history = [];
+                    renderHistory();
+
+                    // Update analysis immediately
+                    debouncedUpdateAnalysis();
+                }
+            };
+
+            lockIcon.addEventListener('click', () => toggleLock(lockIcon));
+
             sliderContainer.append(slider, valueLabel);
-            row.append(nameLabel, weightInput, sliderContainer);
+            row.append(lockIcon, nameLabel, weightInput, sliderContainer);
             container.appendChild(row);
             
             // Initial updates
@@ -1107,6 +1179,7 @@ async function initializePage1() {
         // Reset detailed settings when character changes
         userSelection.entry_weights = {};
         userSelection.target_entries = {};
+        userSelection.locked_keys = [];
         checkSelectionsAndToggleOptions();
         updateAvatar(e.target.value);
         console.log('Selection updated:', userSelection);
@@ -1153,6 +1226,7 @@ async function initializePage1() {
             coef: userSelection.entry_weights,
             score_thres: scoreThres,
             scheduler: userSelection.discard_scheduler,
+            locked_keys: userSelection.locked_keys
         };
 
         try {
@@ -1531,7 +1605,8 @@ async function initializePage1() {
                 coef: userSelection.entry_weights,
                 score_thres: scoreThres,
                 scheduler: userSelection.discard_scheduler,
-                profile: item.profile
+                profile: item.profile,
+                locked_keys: userSelection.locked_keys
             };
             return fetch(`${API_BASE_URL}/api/get_full_analysis`, {
                 method: 'POST',
@@ -1789,6 +1864,7 @@ async function initializePage1() {
             tuner_weight: resourceWeights.tuner,
             coef: userSelection.entry_weights,
             score_thres: scoreThres,
+            locked_keys: userSelection.locked_keys,
             iterations: 20
         };
 

@@ -42,10 +42,13 @@ async def get_brief_analysis(
     profile: EchoProfile,
     coef: EntryCoef,
     score_thres: float,
+    locked_keys: list = None
 ) -> AnalysisResult:
+    if locked_keys is None:
+        locked_keys = []
     score = profile.get_score(coef)
     expected_score = profile.get_expected_score(coef)
-    prob_above_threshold = profile.prob_above_score(coef, score_thres)
+    prob_above_threshold = profile.prob_above_score(coef, score_thres, locked_keys)
 
     return AnalysisResult(
         score=score,
@@ -61,12 +64,15 @@ async def get_analysis(
     profile: EchoProfile, 
     coef: EntryCoef, 
     score_thres: float, 
-    scheduler: DiscardScheduler
+    scheduler: DiscardScheduler,
+    locked_keys: list = None
 ) -> AnalysisResult:
+    if locked_keys is None:
+        locked_keys = []
     score = profile.get_score(coef)
     expected_score = profile.get_expected_score(coef)
-    prob_above_threshold = profile.prob_above_score(coef, score_thres)
-    prob_above_threshold_with_discard, expected_wasted_exp, expected_wasted_tuner = profile.get_statistics(coef, score_thres, scheduler)
+    prob_above_threshold = profile.prob_above_score(coef, score_thres, locked_keys)
+    prob_above_threshold_with_discard, expected_wasted_exp, expected_wasted_tuner = profile.get_statistics(coef, score_thres, scheduler, locked_keys)
 
     exp = [0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
         24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600]
@@ -97,13 +103,16 @@ async def get_analysis(
         expected_total_wasted_tuner=expected_total_wasted_tuner
     )
 
-async def get_example_profile(level: int, prob: float, coef: EntryCoef, score_thres: float) -> EchoProfile:
+async def get_example_profile(level: int, prob: float, coef: EntryCoef, score_thres: float, locked_keys: list = None) -> EchoProfile:
+    if locked_keys is None:
+        locked_keys = []
     profile = await run_in_threadpool(
         get_example_profile_py,
         level,
         prob,
         coef,
-        score_thres
+        score_thres,
+        locked_keys
     )
     return profile
 
@@ -113,9 +122,12 @@ async def get_optimal_scheduler(
     tuner_weight: float,
     coef: EntryCoef,
     score_thres: float,
+    locked_keys: list = None,
     iterations: int = 20
 ) -> DiscardScheduler:
     """Calculate optimal discard scheduler based on resource weights."""
+    if locked_keys is None:
+        locked_keys = []
     scheduler = await run_in_threadpool(
         get_optimal_scheduler_py,
         num_echo_weight,
@@ -123,6 +135,7 @@ async def get_optimal_scheduler(
         tuner_weight,
         coef,
         score_thres,
+        locked_keys,
         iterations
     )
     return scheduler

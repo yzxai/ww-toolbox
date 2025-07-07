@@ -211,7 +211,7 @@ class EchoProfile:
                     substituted_name = name
 
                     for rare_char in rare_chars:
-                        substituted_name = substituted_name.replace(rare_char, ".?")
+                        substituted_name = substituted_name.replace(rare_char, ".")
                     pattern = re.compile(substituted_name)
 
                     if re.search(pattern, line):
@@ -282,10 +282,12 @@ class EchoProfile:
     def to_cpp(self):
         return profile_cpp.EchoProfile(self.level, {k: float(v) for k, v in self.__dict__.items() if k != "level" and k != "name"})
 
-    def prob_above_score(self, coef: 'EntryCoef', threshold: float) -> float:
-        return profile_cpp.prob_above_score(self.to_cpp(), coef.to_cpp(), threshold, stat_data)
+    def prob_above_score(self, coef: 'EntryCoef', threshold: float, locked_keys: list = None) -> float:
+        if locked_keys is None:
+            locked_keys = []
+        return profile_cpp.prob_above_score(self.to_cpp(), coef.to_cpp(), threshold, locked_keys, stat_data)
 
-    def get_statistics(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler) -> tuple[float, float, float]:
+    def get_statistics(self, coef: 'EntryCoef', score_thres: float, scheduler: DiscardScheduler, locked_keys: list = None) -> tuple[float, float, float]:
         """Return statistics about current profile under the given scheduler.
 
         The underlying C++ implementation now returns a struct (pybind11 wrapped)
@@ -298,12 +300,15 @@ class EchoProfile:
         We convert it to a python tuple so that the existing downstream
         code (e.g. api.get_analysis) continues to work without change.
         """
+        if locked_keys is None:
+            locked_keys = []
 
         # Call the updated C++ function which returns a Result struct
         res = profile_cpp.get_statistics(
             self.to_cpp(),
             coef.to_cpp(),
             score_thres,
+            locked_keys,
             scheduler.to_cpp(),
             stat_data,
         )
@@ -315,9 +320,11 @@ class EchoProfile:
             float(res.expected_wasted_tuner),
         )
 
-def get_example_profile_above_threshold(level: int, prob: float, coef: EntryCoef, score_thres: float) -> EchoProfile:
+def get_example_profile_above_threshold(level: int, prob: float, coef: EntryCoef, score_thres: float, locked_keys: list = None) -> EchoProfile:
+    if locked_keys is None:
+        locked_keys = []
     cpp_profile = profile_cpp.get_example_profile_above_threshold(
-        level, prob, coef.to_cpp(), score_thres, stat_data
+        level, prob, coef.to_cpp(), score_thres, locked_keys, stat_data
     )
     # The C++ function returns an empty profile if not found
     if cpp_profile.level == 0 and not cpp_profile.values:
@@ -330,7 +337,8 @@ def get_optimal_scheduler(
     tuner_weight: float,
     coef: EntryCoef,
     score_thres: float,
-    stop_thres: float = 1e-2
+    locked_keys: list = None,
+    iterations: int = 20
 ) -> DiscardScheduler:
     """Calculate optimal discard scheduler based on resource weights.
     
@@ -340,14 +348,17 @@ def get_optimal_scheduler(
         tuner_weight: Weight for tuners wasted
         coef: Entry coefficients
         score_thres: Score threshold to achieve
-        stop_thres: Convergence threshold for optimization
+        locked_keys: List of entry keys that must be present
+        iterations: Number of optimization iterations
         
     Returns:
         DiscardScheduler: Optimal discard thresholds
     """
+    if locked_keys is None:
+        locked_keys = []
     cpp_scheduler = profile_cpp.get_optimal_scheduler(
         num_echo_weight, exp_weight, tuner_weight,
-        coef.to_cpp(), score_thres, stat_data, stop_thres
+        coef.to_cpp(), score_thres, locked_keys, stat_data, iterations
     )
     
     # Convert C++ DiscardScheduler to Python DiscardScheduler
