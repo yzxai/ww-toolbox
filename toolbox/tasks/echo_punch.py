@@ -2,6 +2,7 @@ from toolbox.tasks.echo_task import EchoTask, Page
 from toolbox.core.profile import EchoProfile
 from toolbox.utils.ocr import ocr_pattern, ocr
 from toolbox.utils.logger import logger
+from toolbox.core.interaction import Element
 import time
 
 class EchoPunch(EchoTask):
@@ -12,6 +13,14 @@ class EchoPunch(EchoTask):
     def run(self, profile: EchoProfile, work_state: dict) -> EchoProfile:
         self.interaction.ensure_connected()
         self.to_page(Page.UPGRADE)
+        screenshot = self.interaction.screenshot_region(0, 0.6, 0.5, 1)
+        if len(ocr_pattern(screenshot, "快捷放入")) > 0:
+            logger.info("Current echo is in the shortcut mode, switching to the normal mode")
+            self.interaction.click_img_template(Element.CONFIG, (0, 0.6, 0.5, 1))
+            time.sleep(0.5)
+            self.interaction.click_ocr("阶段放入", region=(0.5, 0.3, 0.8, 0.6))
+            self.interaction.click_ocr("确认", region=(0.5, 0.5, 0.8, 0.9))
+
         self.interaction.click_ocr("阶段放入", region=(0, 0.6, 0.5, 1))
         time.sleep(0.5)
 
@@ -63,11 +72,16 @@ class EchoPunch(EchoTask):
             raise Exception("Failed to capture the level after 10 retries")
 
         self.interaction.send_key("esc")
-        time.sleep(0.5)
 
         if overflow:
-            self.interaction.send_key("esc")
-            time.sleep(0.5)
+            time.sleep(1)
+            for _ in range(10):
+                screenshot = self.interaction.screenshot_region(0.3, 0.18, 0.7, 0.36)
+                if len(ocr_pattern(screenshot, "材料返还")) > 0:
+                    self.interaction.send_key("esc")
+                    break
+        
+        time.sleep(0.8)
 
         self.to_page(Page.TUNE)
         self.interaction.click_ocr("调谐", region=(0, 0.87, 0.5, 1))

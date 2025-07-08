@@ -1793,6 +1793,60 @@ async function initializePage1() {
         }
     });
 
+    const discardEchosBtn = document.getElementById('discard-echos-btn');
+    if (discardEchosBtn) {
+        discardEchosBtn.addEventListener('click', async () => {
+            const echosToDiscard = scannedProfiles
+                .filter(item => isEchoDiscarded(item))
+                .map(item => item.profile);
+        
+            if (echosToDiscard.length === 0) {
+                console.log("No echos to discard.");
+                return;
+            }
+        
+            discardEchosBtn.disabled = true;
+            discardEchosBtn.classList.remove('btn-success', 'btn-danger');
+            const icon = discardEchosBtn.querySelector('i');
+            const originalIconClass = icon.className;
+            icon.className = 'mdi mdi-loading mdi-spin';
+        
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/discard_echo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(echosToDiscard)
+                });
+        
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const result = await response.json();
+                if (result.success) {
+                    icon.className = 'mdi mdi-check';
+                    discardEchosBtn.classList.add('btn-success');
+                    
+                    scannedProfiles = scannedProfiles.filter(item => !isEchoDiscarded(item));
+                    renderScannedEchos();
+        
+                } else {
+                    throw new Error("Discard operation failed on server.");
+                }
+            } catch (error) {
+                console.error("Error discarding echos:", error);
+                discardEchosBtn.classList.add('btn-danger');
+                icon.className = 'mdi mdi-alert-circle';
+            } finally {
+                setTimeout(() => {
+                    if (!discardEchosBtn.classList.contains('btn-danger')){
+                        discardEchosBtn.disabled = false;
+                        icon.className = originalIconClass;
+                        discardEchosBtn.classList.remove('btn-success');
+                    }
+                }, 2000);
+            }
+        });
+    }
+
     const defaultParamsBtn = document.getElementById('default-params-btn');
     defaultParamsBtn.addEventListener('click', () => {
         // this is purely empirical 
@@ -1905,15 +1959,17 @@ async function initializePage1() {
         const applyFilterBtn = document.getElementById('apply-filter-btn');
         const scanEchosBtn = document.getElementById('scan-echos-btn');
         const startWorkBtn = document.getElementById('start-work-btn');
+        const discardBtn = document.getElementById('discard-echos-btn');
 
         const filterReady = applyFilterBtn.classList.contains('btn-success');
         const scanReady = scanEchosBtn.classList.contains('btn-success');
 
         startWorkBtn.disabled = !(filterReady && scanReady);
+        if (discardBtn) discardBtn.disabled = !scanReady;
     }
 
     function isEchoDiscarded(item) {
-        if (!item.analysis || item.profile.level >= 25) {
+        if (!item.analysis || item.analysis.prob_above_threshold_with_discard === 0) {
             return false;
         }
     

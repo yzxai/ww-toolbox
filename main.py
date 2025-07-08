@@ -201,6 +201,16 @@ async def upgrade_echo_endpoint(profile_data: dict):
     new_profile = await api.upgrade_echo(profile, WORK_STATE)
     return new_profile
 
+@app.post("/api/discard_echo")
+async def discard_echo_endpoint(discard_list: list[dict]):
+    """
+    Discards a list of selected echos.
+    """
+    profiles = [EchoProfile().from_dict(p) for p in discard_list]
+    logger.info(f"Received request to discard {len(profiles)} echos.")
+    success = await api.discard_echo(profiles)
+    return {"success": success}
+
 @app.post("/api/get_echo_search_result")
 async def get_echo_search_result_endpoint(data: dict):
     result = await api.get_echo_search_result(data)

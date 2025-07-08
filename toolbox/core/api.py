@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from toolbox.tasks import EchoFilter, EchoPageSelector, EchoScan, EchoSearch, EchoPunch
+from toolbox.tasks import EchoFilter, EchoPageSelector, EchoScan, EchoSearch, EchoPunch, EchoDiscard
 from .profile import EchoProfile, EntryCoef, DiscardScheduler, get_example_profile_above_threshold as get_example_profile_py, get_optimal_scheduler as get_optimal_scheduler_py
 from fastapi.concurrency import run_in_threadpool
 
@@ -19,6 +19,11 @@ async def scan_echo() -> list[EchoProfile]:
     result = await run_in_threadpool(scan_task.run)
 
     return result
+
+async def discard_echo(discard_list: list[EchoProfile]):
+    task = EchoDiscard()
+    await run_in_threadpool(task.run, discard_list)
+    return True
 
 @dataclass
 class AnalysisResult:

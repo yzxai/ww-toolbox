@@ -221,7 +221,7 @@ MemoKey get_memo_key(const EchoProfile& profile, const EntryCoef& coef) {
     }
     std::sort(key.non_zero_keys.begin(), key.non_zero_keys.end());
     key.score = get_score(profile, coef);
-    key.score_rounded = std::round(key.score * 30) / 30.0;
+    key.score_rounded = std::round(key.score * 20) / 20.0;
     return key;
 }
 
@@ -568,9 +568,9 @@ DiscardScheduler _get_optimal_scheduler_internal(
     std::unordered_map<MemoKey, bool> strategies;
 
     // This iterative algorithm is inspired by Shallea's post https://bbs.nga.cn/read.php?tid=44508135
-
+    const double stop_thres = 1e-4;
     Resource lower_bound = Resource(0.0, 0.0, 0.0), upper_bound = current_resource;
-    for (int i = 0; i < 2 * iterations; ++i) {
+    for (int i = 0; ; ++i) {
         if (i < iterations) current_resource = (lower_bound + upper_bound) * 0.5;
         std::unordered_map<MemoKey, Resource> resource_cache;
         std::function<Resource(const EchoProfile&)> solve = [&](const EchoProfile& profile) -> Resource {
@@ -616,12 +616,18 @@ DiscardScheduler _get_optimal_scheduler_internal(
         };
 
         Resource resource_after_iterate = solve(EchoProfile());
-        if (get_resource_score(resource_after_iterate) >= get_resource_score(current_resource)) {
+        double score_after_iterate = get_resource_score(resource_after_iterate);
+        double score_current = get_resource_score(current_resource);
+        std::cout << "score_after_iterate: " << score_after_iterate << ", score_current: " << score_current << std::endl;
+        if (score_after_iterate >= score_current) {
             lower_bound = current_resource;
         } else {
             upper_bound = current_resource;
         }
-        if (i >= iterations) current_resource = current_resource + (resource_after_iterate - current_resource) * 10;
+        if (i >= iterations) {
+            current_resource = current_resource + (resource_after_iterate - current_resource) * 7;
+            if (std::abs(score_after_iterate - score_current) < stop_thres) break;
+        }
     }
 
     DiscardScheduler scheduler(std::vector<double>(4, 1.0));
@@ -631,6 +637,8 @@ DiscardScheduler _get_optimal_scheduler_internal(
             scheduler.thresholds[key.level / 5 - 1] = std::min(scheduler.thresholds[key.level / 5 - 1], prob);
         }
     }
+
+    std::cout << "resource_after_iterate: " << current_resource.num_echo << ", " << current_resource.exp << ", " << current_resource.tuner << std::endl;
 
     return scheduler;
 }

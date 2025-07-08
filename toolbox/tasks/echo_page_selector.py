@@ -47,7 +47,10 @@ class EchoPageSelector(EchoTask):
             self.interaction.send_text(filter.name)
             self.interaction.send_key("enter")
             time.sleep(0.5)
-            self.interaction.click(0.3, 0.3)
+            if filter.name == "角":
+                self.interaction.click(0.7, 0.3)
+            else:
+                self.interaction.click(0.3, 0.3)
             self.interaction.click_ocr("确认", region="bottom")
         
         # 2. filter the echos by suit 

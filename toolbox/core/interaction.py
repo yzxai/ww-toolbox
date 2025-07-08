@@ -20,6 +20,7 @@ class Element(Enum):
     TUNE = "tune.png"
     UPGRADE = "upgrade.png"
     TRASH = "trash.png"
+    CONFIG = "config.png"
 
     def to_img(self) -> Image.Image:
         path = get_assets_dir() / "imgs" / "game" / self.value
@@ -244,19 +245,25 @@ class Interaction:
 
         # Handle special keys
         key_aliases = {
-            'enter': '\r', 'space': ' ', 'backspace': '\b', 'tab': '\t',
-            'shift': '\x10', 'ctrl': '\x11', 'alt': '\x12', 'esc': '\x1b',
-            'delete': '\x7f', 'left': '\x25', 'right': '\x27', 'up': '\x26',
-            'down': '\x28'
+            'enter': win32con.VK_RETURN, 'space': win32con.VK_SPACE, 'backspace': win32con.VK_BACK, 'tab': win32con.VK_TAB,
+            'shift': win32con.VK_SHIFT, 'ctrl': win32con.VK_CONTROL, 'alt': win32con.VK_MENU, 'esc': win32con.VK_ESCAPE,
+            'delete': win32con.VK_DELETE, 'left': win32con.VK_LEFT, 'right': win32con.VK_RIGHT, 'up': win32con.VK_UP,
+            'down': win32con.VK_DOWN
         }
 
         if key in key_aliases:
-            key = key_aliases[key]
+            vk_code = key_aliases[key]
+        elif len(key) == 1:
+            # For single characters, get the virtual key code
+            vk_code = win32api.VkKeyScan(key) & 0xFF
+        else:
+            logger.error(f"Invalid key passed to send_key: {key}")
+            return
 
         # Send the key to the game window
-        win32api.SendMessage(self.game_hwnd, win32con.WM_KEYDOWN, ord(key), 0)
+        win32api.SendMessage(self.game_hwnd, win32con.WM_KEYDOWN, vk_code, 0)
         time.sleep(0.03)
-        win32api.SendMessage(self.game_hwnd, win32con.WM_KEYUP, ord(key), 0)
+        win32api.SendMessage(self.game_hwnd, win32con.WM_KEYUP, vk_code, 0)
         time.sleep(0.02)
     
     def _recognize_region(self, region: tuple[float, float, float, float] | str) -> tuple[float, float, float, float] | None:

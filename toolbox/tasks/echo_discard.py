@@ -6,24 +6,28 @@ from toolbox.core.profile import EchoProfile
 from toolbox.utils.ocr import detect_and_merge_rectangles_pil, ocr_pattern
 from toolbox.utils.logger import logger
 
-class EchoScan(EchoTask):
+class EchoDiscard(EchoTask):
     """
     Scan all the echos in the main page and return the list of profiles.
     """
-    def run(self) -> list[EchoProfile]:
+    def run(self, discard_list: list[EchoProfile]):
         self.interaction.ensure_connected()
-        logger.info("Scanning all echos in the main page")
+        logger.info(f"Discarding selected echos: {discard_list}")
 
-        # 1. Ensure we are in the echo inspection page 
+        discard_list_hash = [hash(profile) for profile in discard_list]
+
         self.to_page(Page.MAIN)
 
-        for i in range(10):
+        for _ in range(10):
             time.sleep(0.1)
             self.interaction.scroll(0.192, 0.244, -30)
+        
+        def discard():
+            self.interaction.send_key("C")
+            time.sleep(0.1)
+            self.interaction.send_key("Z")
 
-        # 2. Scan all presented echo in the first page
         time.sleep(0.5)
-        profiles = []
         width, height = self.interaction.get_app_window_size()
 
         left_top = (0.092, 0.231)
@@ -31,6 +35,7 @@ class EchoScan(EchoTask):
         screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], right_bottom[0], right_bottom[1])
 
         boxes = detect_and_merge_rectangles_pil(screenshot)
+        num_checked = 0
 
         for box in boxes:
             x, y, w, h = box
@@ -42,20 +47,19 @@ class EchoScan(EchoTask):
 
                 if profile.validate():
                     if profile.level == 0:
-                        # all following echos are not upgraded yet, skip the rest and return
-                        return profiles
-                        
-                    profiles.append(profile)
+                        return
+                    
+                    num_checked += 1
+                    if hash(profile) in discard_list_hash:
+                        discard()
                     break
 
                 time.sleep(1)
             
-        if len(profiles) < 15:
-            # this indicates all echos have been scanned 
-            logger.info("All echos have been scanned.")
-            return profiles
+        if num_checked < 15:
+            logger.info("All echos have been checked.")
+            return
         
-        # 3. Scoll down to bottom line by line and scan each echo 
         last_line_valid = True
         continuous_valid_lines, continuous_invalid_lines = 0, 0
 
@@ -71,7 +75,6 @@ class EchoScan(EchoTask):
 
             if len(boxes) > 0:
                 if last_line_valid is False:
-                    # retake the screenshot to ensure the boxes are not missed
                     _tmp_screenshot = self.interaction.screenshot_region(left_top[0], left_top[1], 
                             right_bottom[0], right_bottom[1] + 0.1)
                     boxes = detect_and_merge_rectangles_pil(_tmp_screenshot)
@@ -87,10 +90,11 @@ class EchoScan(EchoTask):
 
                             if profile.validate():
                                 if profile.level == 0:
-                                    # all following echos are not upgraded yet, skip the rest and return
-                                    return profiles
+                                    return
 
-                                profiles.append(profile)
+                                num_checked += 1
+                                if hash(profile) in discard_list_hash:
+                                    discard()
                                 break
 
                             time.sleep(1)
@@ -109,7 +113,5 @@ class EchoScan(EchoTask):
             if continuous_valid_lines >= 20 or continuous_invalid_lines >= 20:
                 break
         
-        logger.info(f"Scanned {len(profiles)} echos")
-
-        return profiles
+        logger.info(f"Checked {num_checked} echos")
         
