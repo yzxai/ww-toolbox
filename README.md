@@ -36,7 +36,7 @@ We only support Windows(x86) so far considering that most users prefer playing W
     conda create -n ww-toolbox python=3.11
 
     # Activate the virtual environment
-    conda activate ww-toobox
+    conda activate ww-toolbox
 
     # Install dependencies
     pip install -r requirements.txt
