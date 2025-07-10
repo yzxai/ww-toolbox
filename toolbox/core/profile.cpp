@@ -342,8 +342,8 @@ double prob_above_score(
     return _prob_above_score(get_memo_key(profile, coef), coef, threshold, locked_keys, stat_data);
 }
 
-static std::vector<int> echo_exp = {0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
-    24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600};
+static std::vector<int> echo_exp = {0, 500, 1000, 2000, 3000, 4500, 6500, 8500, 10500, 13500, 16500, 20500, 
+    24500, 29000, 34000, 40000, 46000, 53500, 61000, 70000, 79500, 90000, 101500, 114000, 127500, 143000};
 
 Result _get_statistics_internal(
     const EchoProfile& profile,
@@ -559,6 +559,8 @@ DiscardScheduler _get_optimal_scheduler_internal(
         default_result.expected_wasted_tuner / default_result.prob_above_threshold_with_discard
     );
 
+    std::cout << "current_resource: " << current_resource.num_echo << ", " << current_resource.exp << ", " << current_resource.tuner << std::endl;
+
     std::function<double(const Resource&)> get_resource_score = [&](const Resource& resource) -> double {
         return num_echo_weight * 10 * resource.num_echo 
             + exp_weight / 1200 * resource.exp 
@@ -576,7 +578,7 @@ DiscardScheduler _get_optimal_scheduler_internal(
         std::function<Resource(const EchoProfile&)> solve = [&](const EchoProfile& profile) -> Resource {
             double score = get_score(profile, coef);
             if (score >= score_thres && satisfies_locked_keys(profile, locked_keys)) return Resource(0.0, 0.0, 0.0);
-            if (profile.level == 25) return current_resource + Resource(1.0, 0.0, 0.0);
+            if (profile.level == 25) return current_resource + Resource(1.0, echo_exp[25], 50);
 
             MemoKey key = get_memo_key(profile, coef);
             auto it = resource_cache.find(key);
@@ -586,7 +588,7 @@ DiscardScheduler _get_optimal_scheduler_internal(
             int m = (int)coef.values.size() - (profile.level / 5);
             int next_level = ((profile.level / 5) + 1) * 5;
 
-            Resource result(0.0, echo_exp[next_level] - echo_exp[profile.level], 10);
+            Resource result(0.0, 0.0, 0.0);
             for (size_t i = 0; i < avail_keys.size(); ++i) {
                 const std::string& key_str = avail_keys[i];
                 EchoProfile new_p = profile;
@@ -607,7 +609,7 @@ DiscardScheduler _get_optimal_scheduler_internal(
             EchoProfile new_p = profile;
             new_p.level = next_level;
             result = result + solve(new_p) * ((double)useless_keys / m);
-            Resource resource_if_discard = Resource(1.0, 0.0, 0.0) + current_resource;
+            Resource resource_if_discard = Resource(1.0, echo_exp[profile.level], profile.level / 5 * 10) + current_resource;
 
             bool discard = get_resource_score(result) > get_resource_score(resource_if_discard);
             strategies[key] = discard;
@@ -625,8 +627,9 @@ DiscardScheduler _get_optimal_scheduler_internal(
             upper_bound = current_resource;
         }
         if (i >= iterations) {
-            current_resource = current_resource + (resource_after_iterate - current_resource) * 7;
+            std::cout << "current_resource: " << current_resource.num_echo << ", " << current_resource.exp << ", " << current_resource.tuner << std::endl;
             if (std::abs(score_after_iterate - score_current) < stop_thres) break;
+            current_resource = current_resource + (resource_after_iterate - current_resource) * 7;
         }
     }
 

@@ -83,7 +83,21 @@ class EchoPunch(EchoTask):
         
         time.sleep(0.8)
 
-        self.to_page(Page.TUNE)
+        success = False
+        for _ in range(3):
+            try:
+                self.to_page(Page.TUNE)
+            except:
+                logger.warning("Failed to switch to the tune page, retrying...")
+                time.sleep(0.5)
+            else:
+                success = True
+                break
+        
+        if not success:
+            logger.critical("Failed to switch to the tune page after 3 retries, returning...")
+            raise Exception("Failed to switch to the tune page after 3 retries")
+
         self.interaction.click_ocr("调谐", region=(0, 0.87, 0.5, 1))
         time.sleep(1)
 

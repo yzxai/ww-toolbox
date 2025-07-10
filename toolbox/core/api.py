@@ -79,8 +79,8 @@ async def get_analysis(
     prob_above_threshold = profile.prob_above_score(coef, score_thres, locked_keys)
     prob_above_threshold_with_discard, expected_wasted_exp, expected_wasted_tuner = profile.get_statistics(coef, score_thres, scheduler, locked_keys)
 
-    exp = [0, 400, 1000, 1900, 3000, 4400, 6100, 8100, 10500, 13300, 16500, 20100, 
-        24200, 28800, 33900, 39600, 46000, 53100, 60900, 69600, 79100, 89600, 101100, 113700, 127500, 142600]
+    exp = [0, 500, 1000, 2000, 3000, 4500, 6500, 8500, 10500, 13500, 16500, 20500, 
+        24500, 29000, 34000, 40000, 46000, 53500, 61000, 70000, 79500, 90000, 101500, 114000, 127500, 143000]
     
     if profile.level != 0:
         expected_wasted_exp -= exp[profile.level] * (1 - prob_above_threshold)
