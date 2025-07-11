@@ -1,7 +1,9 @@
 <div align="center">
   <img src="./docs/img/logo.png" alt="Logo" width="200">
   <h1 align="center">Wuthering Waves Toolbox</h1>
-  <h2 align="center"><a herf="https://github.com/PlanarG/ww-toolbox/blob/main/README.md">English</a> | 中文</h2>
+  <h2 align="center">
+    [English](./README.md) | 中文
+  </h2>
 </div>
 
 欢迎使用 Wuthering Waves Toolbox，这是一个基于图像识别的工具集，它能够为你的游戏内数据提供严谨、综合的数据分析，以精确的概率武器直指你遇到的各种难题。同时，Wuthering Waves Toolbox 也提供一系列的自动化子程序，即使是小白也能一步到位摇身变成资源分析大师！目前这个项目还处于开发阶段，部分功能可能会存在稳定性问题，欢迎在 issue 中反馈。
