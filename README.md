@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./docs/img/logo.png" alt="Logo" width="200">
   <h1 align="center">Wuthering Waves Toolbox</h1>
-  <h2 align="center">English | <a herf="./README_CN.md">中文</a></h2>
+  <h2 align="center">English | <a herf="https://github.com/PlanarG/ww-toolbox/blob/main/README_CN.md">中文</a></h2>
 </div>
 
 Welcome to Wuthering Waves Toolbox, a handy CV-based toolset aiming at providing holistic, rigorous analysis and automation to help you better understand your in-game statistics. 
