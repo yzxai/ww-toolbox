@@ -2,7 +2,9 @@
   <img src="./docs/img/logo.png" alt="Logo" width="200">
   <h1 align="center">Wuthering Waves Toolbox</h1>
   <h2 align="center">
+
     [English](./README.md) | 中文
+    
   </h2>
 </div>
 
