@@ -2026,4 +2026,56 @@ async function initializePage1() {
             <ul id="example-profile-entries">${entriesHtml}</ul>
         `;
     }
+
+    const manualModeToggle = document.getElementById('manual-mode-toggle');
+    const actionButtons = [
+        document.getElementById('apply-filter-btn'),
+        document.getElementById('scan-echos-btn'),
+        document.getElementById('start-work-btn'),
+        document.getElementById('discard-echos-btn')
+    ];
+
+    if (manualModeToggle) {
+        manualModeToggle.addEventListener('change', async (event) => {
+            const isEnabled = event.target.checked;
+            
+            actionButtons.forEach(btn => {
+                if(btn) btn.disabled = isEnabled;
+            });
+
+            if (isEnabled) {
+                // Start manual mode
+                const scoreThres = parseFloat(calculateTotalScore());
+                const payload = {
+                    coef: userSelection.entry_weights,
+                    score_thres: scoreThres,
+                    scheduler: userSelection.discard_scheduler,
+                    locked_keys: userSelection.locked_keys
+                };
+
+                try {
+                    // We don't wait for this to finish, just fire and forget
+                    fetch(`${API_BASE_URL}/api/start_manual_mode`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    console.log('Manual mode started.');
+                } catch (error) {
+                    console.error('Failed to start manual mode:', error);
+                    // Re-enable buttons if start fails
+                    actionButtons.forEach(btn => { if(btn) btn.disabled = false; });
+                    manualModeToggle.checked = false;
+                }
+            } else {
+                // Stop manual mode
+                try {
+                    await fetch(`${API_BASE_URL}/api/stop_work`, { method: 'POST' });
+                    console.log('Stop signal for manual mode sent successfully.');
+                } catch (err) {
+                    console.error('Failed to send stop signal for manual mode:', err);
+                }
+            }
+        });
+    } 
 } 

@@ -201,6 +201,30 @@ async def upgrade_echo_endpoint(profile_data: dict):
     new_profile = await api.upgrade_echo(profile, WORK_STATE)
     return new_profile
 
+@app.post("/api/start_manual_mode")
+async def start_manual_mode_endpoint(data: dict):
+    WORK_STATE["cancel_requested"] = False
+    
+    coef_data_dict = data.get("coef", {})
+    score_thres = data.get("score_thres", 0.0)
+    scheduler_thresholds = data.get("scheduler", [])
+    locked_keys = data.get("locked_keys", [])
+
+    coef = EntryCoef()
+    for key, value in coef_data_dict.items():
+        if hasattr(coef, key):
+            setattr(coef, key, value)
+    
+    scheduler = DiscardScheduler()
+    if len(scheduler_thresholds) == 4:
+        scheduler.level_5_9 = scheduler_thresholds[0]
+        scheduler.level_10_14 = scheduler_thresholds[1]
+        scheduler.level_15_19 = scheduler_thresholds[2]
+        scheduler.level_20_24 = scheduler_thresholds[3]
+        
+    await api.start_manual_mode(coef, score_thres, scheduler, WORK_STATE, locked_keys)
+    return {"message": "Manual mode started."}
+
 @app.post("/api/discard_echo")
 async def discard_echo_endpoint(discard_list: list[dict]):
     """

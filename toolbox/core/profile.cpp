@@ -278,7 +278,7 @@ double _prob_above_score(
 ) {
     std::vector<std::string> keys;
     for (std::unordered_map<std::string, double>::const_iterator it = coef.values.begin(); it != coef.values.end(); ++it) keys.push_back(it->first);
-    int remain_slots = (25 - profile_key.level) / 5;
+    int remain_slots = 5 - profile_key.level / 5;
     double init_score = profile_key.score;
 
     std::vector<std::string> avail_keys;

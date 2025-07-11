@@ -38,25 +38,30 @@ class EchoTask(BaseTask):
             },
         }
     
+    def is_in_main_page(self) -> bool:
+        screenshot = self.interaction.screenshot()
+        width, height = self.interaction.get_app_window_size()
+        return len(ocr_pattern(screenshot.crop((width * 0.8, 0, width, height * 0.1)), "简述")) > 0
+    
     def current_page(self) -> Page:
         screenshot = self.interaction.screenshot()
 
         width, height = self.interaction.get_app_window_size()
 
-        if len(ocr_pattern(screenshot.crop((0, 0, width * 0.2, height * 0.2)), "排序")) > 0:
-            return Page.SORT
-
-        if len(ocr_pattern(screenshot.crop((0, 0, width * 0.094, height * 0.134)), "筛选")) > 0:
-            return Page.FILTER
+        if len(ocr_pattern(screenshot.crop((width * 0.8, 0, width, height * 0.1)), "简述")) > 0:
+            return Page.MAIN
 
         if len(ocr_pattern(screenshot.crop((0, 0, width * 0.2, height * 0.1)), "强化")) > 0:
             return Page.UPGRADE
 
         if len(ocr_pattern(screenshot.crop((0, 0, width * 0.2, height * 0.1)), "调谐")) > 0:
             return Page.TUNE
-        
-        if len(ocr_pattern(screenshot.crop((width * 0.8, 0, width, height * 0.1)), "简述")) > 0:
-            return Page.MAIN
+
+        if len(ocr_pattern(screenshot.crop((0, 0, width * 0.2, height * 0.2)), "排序")) > 0:
+            return Page.SORT
+
+        if len(ocr_pattern(screenshot.crop((0, 0, width * 0.094, height * 0.134)), "筛选")) > 0:
+            return Page.FILTER
         
         logger.critical("Unknown page")
         raise Exception("Unknown page")

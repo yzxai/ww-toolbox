@@ -152,7 +152,7 @@ class Interaction:
         x_0, y_0, x_1, y_1 = int(width * x_0), int(height * y_0), int(width * x_1), int(height * y_1)
         return screenshot.crop((x_0, y_0, x_1, y_1))
     
-    def click(self, x_ratio: float, y_ratio: float, rand: bool = True, press_time: float = 0.05):
+    def click(self, x_ratio: float, y_ratio: float, rand: bool = True, press_time: float = 0.05, move_cursor: bool = False):
         """
         Click on the game window at the specified coordinates.
         This method works even if the window is in the background or obscured.
@@ -181,6 +181,11 @@ class Interaction:
 
         # Make the window think it's being activated.
         win32api.PostMessage(self.game_hwnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+
+        if move_cursor:
+            screen_position = win32gui.ClientToScreen(self.game_hwnd, (x, y))
+            win32api.SetCursorPos(screen_position)
+
         
         # Now send the standard click messages
         win32api.PostMessage(self.game_hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
