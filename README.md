@@ -1,11 +1,9 @@
 <div align="center">
   <img src="./docs/img/logo.png" alt="Logo" width="200">
   <h1 align="center">Wuthering Waves Toolbox</h1>
-  <h2 align="center">
+  
+English | [中文](./README_CN.md)
 
-    English | [中文](./README_CN.md)
-    
-  </h2>
 </div>
 
 Welcome to Wuthering Waves Toolbox, a handy CV-based toolset aiming at providing holistic, rigorous analysis and automation to help you better understand your in-game statistics. 
