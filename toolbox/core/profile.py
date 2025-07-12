@@ -206,12 +206,15 @@ class EchoProfile:
                 for name in echo_data.keys():
                     # create a regex pattern for the name to ignore rare characters 
                     # and match the line with the pattern
-                    rare_chars = ['魇', '·', '螯', '獠', '鬃', '翎', '鸷', '鹭', '傀', '哨', '蜥', '磐', '铎', '镰', '簇', '湮', '釉', '蛰', '鳄', '飓']
+                    rare_chars = ['魇', '螯', '獠', '鬃', '翎', '鸷', '鹭', '傀', '哨', '蜥', '磐', '铎', '镰', '簇', '湮', '釉', '蛰', '鳄', '飓', '芙']
+                    ignore_chars = ['·']
 
                     substituted_name = name
 
                     for rare_char in rare_chars:
                         substituted_name = substituted_name.replace(rare_char, ".")
+                    for ignore_char in ignore_chars:
+                        substituted_name = substituted_name.replace(ignore_char, ".?")
                     pattern = re.compile(substituted_name)
 
                     if re.search(pattern, line):

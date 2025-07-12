@@ -18,7 +18,7 @@ ext_modules = [
 
 setup(
     name="toolbox",
-    version="0.5.0",
+    version="0.5.1",
     description="A toolbox with fast C++ backend for profile calculations.",
     ext_modules=ext_modules,
     install_requires=requirements,
