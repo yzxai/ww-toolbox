@@ -11,7 +11,9 @@ class EchoSearch(EchoTask):
     """
     def run(self, profile: EchoProfile, work_state: dict, main_entry_filter: str = None, max_retries: int = 3) -> EchoProfile:
         logger.info(f"Searching for echo: {profile}")
-        logger.info(f"Main entry filter: {main_entry_filter}")
+        rare_chars = ['湮']
+        for rare_char in rare_chars:
+            main_entry_filter = main_entry_filter.replace(rare_char, ".")
 
         self.interaction.ensure_connected()
 
@@ -51,7 +53,7 @@ class EchoSearch(EchoTask):
                     self.interaction.scroll(0.192, 0.244, -30)
                     time.sleep(0.1)
 
-                time.sleep(0.5)
+                time.sleep(0.3)
 
             width, height = self.interaction.get_app_window_size()
             left_top = (0.092, 0.231)

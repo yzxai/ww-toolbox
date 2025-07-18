@@ -219,10 +219,10 @@ def detect_and_merge_rectangles_pil(
     pil_image: Image.Image,
     aspect_ratio_range=(0.8, 1.2),
     area_range=(300, 1e3),
-    iou_threshold=0.2,
+    iou_threshold=0.25,
     num_perturbations=50,
     brightness_threshold=100,
-    bright_area_ratio_threshold=0.3,
+    bright_area_ratio_threshold=0.2,
     debug=False
 ) -> list[tuple[int, int, int, int]]:
     """

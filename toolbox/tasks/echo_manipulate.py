@@ -24,18 +24,8 @@ class EchoManipulate(EchoTask):
         )
 
         press_count = 0
-
-        def get_widget_position(x_ratio: float, y_ratio: float):
-            width, height = self.interaction.get_app_window_size()
-            x = int(width * x_ratio)
-            y = int(height * y_ratio)
-
-            screen_x, screen_y = win32gui.ClientToScreen(self.interaction.game_hwnd, (x, y))
-            size = round(44 * width / 2560)
-
-            return screen_x, screen_y, size
         
-        current_state = "clear"
+        current_profile, current_state = None, "clear"
         supress = False
         def update_widget_state(state: str, prob: float = None):
             nonlocal current_state
@@ -63,9 +53,11 @@ class EchoManipulate(EchoTask):
                 self.interaction.click(0.23, 0.922, move_cursor=True)
                 time.sleep(0.5)
 
-                for _ in range(4):
+
+                click_count = 20 if current_profile is not None and current_profile.level >= 23 else 5
+                for _ in range(click_count):
                     self.interaction.click(0.694, 0.720, move_cursor=True)
-                    time.sleep(0.6)
+                    time.sleep(0.3)
 
                 self.interaction.click(0.0382, 0.282, move_cursor=True)
                 time.sleep(0.3)
@@ -86,17 +78,21 @@ class EchoManipulate(EchoTask):
                 if self.is_in_main_page():
                     profile_img = self.interaction.screenshot_region(0.7356, 0.1264, 0.952, 0.458)
                     profile = EchoProfile().from_image(profile_img)
-                    if profile.validate():
-                        prob = profile.prob_above_score(coef, score_thres, locked_keys)
-                        prob_thres = 0 if profile.level < 5 else scheduler.level_5_9 if profile.level < 10 else scheduler.level_10_14 \
-                            if profile.level < 15 else scheduler.level_15_19 if profile.level < 20 else scheduler.level_20_24 if profile.level < 25 else 1
-                        if prob < prob_thres:
-                            update_widget_state("fail", prob)
+                    if profile != current_profile:
+                        current_profile = profile
+                        if profile.validate():
+                            prob = profile.prob_above_score(coef, score_thres, locked_keys)
+                            prob_thres = 0 if profile.level < 5 else scheduler.level_5_9 if profile.level < 10 else scheduler.level_10_14 \
+                                if profile.level < 15 else scheduler.level_15_19 if profile.level < 20 else scheduler.level_20_24 if profile.level < 25 else 1
+                            if prob < prob_thres:
+                                update_widget_state("fail", prob)
+                            else:
+                                update_widget_state("ok", prob)
                         else:
-                            update_widget_state("ok", prob)
-                    else:
-                        update_widget_state("clear")
+                            current_profile = None
+                            update_widget_state("clear")
                 else:
+                    current_profile = None
                     update_widget_state("clear")
         finally:
             keyboard.unhook_all()

@@ -27,11 +27,11 @@ class EchoPageSelector(EchoTask):
         for _ in range(3):
             match filter.cost:
                 case 1:
-                    self.interaction.click_ocr("1", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
+                    self.interaction.click_ocr("1", region=(0.15, 0.05, 0.3, 0.15), press_time=0.2)
                 case 3:
-                    self.interaction.click_ocr("3", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
+                    self.interaction.click_ocr("3", region=(0.15, 0.05, 0.3, 0.15), press_time=0.2)
                 case 4:
-                    self.interaction.click_ocr("4", region=(0.15, 0.05, 0.3, 0.2), press_time=0.2)
+                    self.interaction.click_ocr("4", region=(0.15, 0.05, 0.3, 0.15), press_time=0.2)
 
         # 1. filter the echos by name 
         time.sleep(0.3)

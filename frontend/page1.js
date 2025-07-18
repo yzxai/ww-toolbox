@@ -1969,8 +1969,12 @@ async function initializePage1() {
     }
 
     function isEchoDiscarded(item) {
-        if (!item.analysis || item.analysis.prob_above_threshold_with_discard === 0) {
+        if (!item.analysis) {
             return false;
+        }
+
+        if (item.analysis.prob_above_threshold_with_discard === 0) {
+            return true;
         }
     
         const level = item.profile.level;
