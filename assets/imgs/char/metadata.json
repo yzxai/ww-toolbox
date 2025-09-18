@@ -1,160 +1,172 @@
 {
     "characters": [
         {
+            "name": "奥古斯塔",
+            "file": "f5a16eb82dd658c8aa63742686241e49.png"
+        },
+        {
+            "name": "尤诺",
+            "file": "383da460b868537ea4732f8d97a8364e.png"
+        },
+        {
+            "name": "弗洛洛",
+            "file": "bbc6341aa50d5c0f866de08baaf1cab8.png"
+        },
+        {
             "name": "卡提希娅",
-            "file": "7586962e3fb744f2bba429c6325b4dd9.png"
+            "file": "998ddbfbc30155f28eb296e857f76ef8.png"
         },
         {
             "name": "露帕",
-            "file": "8f554b895dd3573f3ffd6fa65b8fbce1.png"
+            "file": "b48df14a42185743aa32578d77f45bd2.png"
         },
         {
             "name": "夏空",
-            "file": "8cc4dde9d91a4c467e3279bd64e3ef40.png"
+            "file": "65c6ba20a0415d0fbb6c416e993adb3a.png"
         },
         {
             "name": "赞妮",
-            "file": "1d1155ae9824e2b6a0f9c430b7c8f814.png"
+            "file": "85d86de7b4b652c1b2b5f02483f83b44.png"
         },
         {
             "name": "坎特蕾拉",
-            "file": "95ae807793807e67b68af1dcd25fb1ef.png"
+            "file": "1e7aae63194450139a8befb5d8e3937c.png"
         },
         {
             "name": "漂泊者·气动",
-            "file": "9efde4dc9d31011e22d7814bb814ef5b.png"
+            "file": "875c604feea45867a05d6c0b1f6c315c.png"
         },
         {
             "name": "漂泊者·气动",
-            "file": "a3119fc85d109c026e8dd33740010aa8.png"
+            "file": "875c604feea45867a05d6c0b1f6c315c.png"
         },
         {
             "name": "布兰特",
-            "file": "9ac58898e8846f6404f6c4425bb25e01.png"
+            "file": "3dbb9d35575550938fec3ea8c6f77a03.png"
         },
         {
             "name": "菲比",
-            "file": "043bbd5aa7d8761597f2a60403752890.png"
+            "file": "f0429228b7c65db6820e3f29384bf059.png"
         },
         {
             "name": "洛可可",
-            "file": "dcec1000016f65d99d7301507087ab7a.png"
+            "file": "45c71bbfe6c750939035133dfa3ec228.png"
         },
         {
             "name": "珂莱塔",
-            "file": "f70e208cf69bd784e39cfdacae81f08b.png"
+            "file": "8bf09a771d4450cd8e0acb1fdbb94180.png"
         },
         {
             "name": "椿",
-            "file": "53f9324d9b80546bde89553944f10b3b.png"
+            "file": "bd908a57c8db56cfb19ef2dc4a95d297.png"
         },
         {
             "name": "灯灯",
-            "file": "b57136e1fdcce7e1b8a98418f0dd7eeb.png"
+            "file": "c516e06d74b05ca0880bd0971634690c.png"
         },
         {
             "name": "守岸人",
-            "file": "e4d24e15e1a52e06d5260ac99c3f6866.png"
+            "file": "40e9b29003de57ea96fb7dd40e9ce217.png"
         },
         {
             "name": "釉瑚",
-            "file": "1a6502b848045cd7b6fca9c2b0009706.png"
+            "file": "4dd881e822e4549a9fb48e1a58b65868.png"
         },
         {
             "name": "折枝",
-            "file": "119622e8c3def322caa611d0f2c35e57.png"
+            "file": "857bbb9e2da45b63921685b4df960694.png"
         },
         {
             "name": "相里要",
-            "file": "6b9b5d59cfce3b954c7562bd6834f660.png"
+            "file": "f2d5b812b9fd50a8bfcb3d6050e56f98.png"
         },
         {
             "name": "长离",
-            "file": "79e75ab813d2ca8e1cf64aa8e77d219d.png"
+            "file": "6b4c46e978f8599ca90c4287797ad5c4.png"
         },
         {
             "name": "今汐",
-            "file": "fe705debb59e71ec4428f3c9a5fffe12.png"
+            "file": "4454842e9ec65a49afc1465309de014f.png"
         },
         {
             "name": "吟霖",
-            "file": "95fdb6c7a0b242d8ee02d015a30ed188.png"
+            "file": "d513903cea4c55488d22ab9bc3dcbd15.png"
         },
         {
             "name": "忌炎",
-            "file": "fed79c813296f7b7e8f7d6a02489d8ea.png"
+            "file": "03149527efd157a3ad2957c857790583.png"
         },
         {
             "name": "鉴心",
-            "file": "70a6be72f6cb96aed0a830867349aa2e.png"
+            "file": "d0d34777a2a257daa546bf78d3b9bb0c.png"
         },
         {
             "name": "卡卡罗",
-            "file": "fcfd7b973890b355514258700851dfd6.png"
+            "file": "6a253fdf0a6954808d1b20ab084a4bac.png"
         },
         {
             "name": "安可",
-            "file": "d4ddd066c9d72d2fe7de2226958d0693.png"
+            "file": "3b7712d8d6bc5e6fb15458c2c5d3dcc9.png"
         },
         {
             "name": "维里奈",
-            "file": "189eb535971d8c3c4172469fecf2a5ad.png"
+            "file": "2b7aa2ae49c05a5f8d24d62df7be8bb6.png"
         },
         {
             "name": "凌阳",
-            "file": "593c4656f2d763f4081d4f143951c410.png"
+            "file": "91cdf01edafb50e58df5a6c2f2d881de.png"
         },
         {
             "name": "漂泊者·衍射",
-            "file": "9efde4dc9d31011e22d7814bb814ef5b.png"
+            "file": "b06aa273bd535b99b4cff8c62cdb0710.png"
         },
         {
             "name": "漂泊者·衍射",
-            "file": "a3119fc85d109c026e8dd33740010aa8.png"
+            "file": "b06aa273bd535b99b4cff8c62cdb0710.png"
         },
         {
             "name": "漂泊者·湮灭",
-            "file": "9efde4dc9d31011e22d7814bb814ef5b.png"
+            "file": "10c26012c53f5a729866c39d1bb48172.png"
         },
         {
             "name": "漂泊者·湮灭",
-            "file": "a3119fc85d109c026e8dd33740010aa8.png"
+            "file": "10c26012c53f5a729866c39d1bb48172.png"
         },
         {
             "name": "秧秧",
-            "file": "c348a7562d6f16e6cdd81ea08ce23b9e.png"
+            "file": "4326fe9b6fef54808d2c91702b25e38f.png"
         },
         {
             "name": "白芷",
-            "file": "ed7dec78d18fbacbcbc7409277fee98c.png"
+            "file": "fdebe848970b56edaa2a3efc0eb8c76e.png"
         },
         {
             "name": "炽霞",
-            "file": "36a4104adc2e6c34651d9c79b010f872.png"
+            "file": "9d50d5bbf4605dd58fb8c9709a1c1768.png"
         },
         {
             "name": "散华",
-            "file": "7381a5dd33f781c726f3f0c2b15c8d78.png"
+            "file": "b5401bdc5e1657f6b72642531be269b5.png"
         },
         {
             "name": "秋水",
-            "file": "8bdde700964bff87d7da2c076d073e60.png"
+            "file": "1091b01efd615aedbdb22a0077afd608.png"
         },
         {
             "name": "丹瑾",
-            "file": "4226520a9ffa0c9937e8c478d15fbef4.png"
+            "file": "62b28a084f265cff94ea0d62251ba6e3.png"
         },
         {
             "name": "莫特斐",
-            "file": "6a969daa862e22c64f027344db67b5b2.png"
+            "file": "b4a2b5f194695f96bb4c6f9c00f03643.png"
         },
         {
             "name": "渊武",
-            "file": "62bb17c8aa36a31389ce58355096b286.png"
+            "file": "42f3433eff215d5c92b4f7e83e15c597.png"
         },
         {
             "name": "桃祈",
-            "file": "7f0192aedcf33237c7ae21b06e3e504e.png"
+            "file": "6c9685428ef159de8d3fce94ac10cfe4.png"
         }
     ]
 }

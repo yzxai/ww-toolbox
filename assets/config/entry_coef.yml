@@ -238,3 +238,23 @@ Taoqi:
   coef:
     resonance_burst: 0.50
     resonance_skill: 0.38
+
+Phrolova:
+  name: "弗洛洛"
+  dmg_source: "atk"
+  coef: 
+    resonance_skill: 0.40
+    resonance_eff: 0
+
+Augusta:
+  name: "奥古斯塔"
+  dmg_source: "atk"
+  coef: 
+    charged_atk: 0.73
+
+Iuno:
+  name: "尤诺"
+  dmg_source: "atk"
+  coef: 
+    resonance_burst: 0.60
+    resonance_eff: 1
