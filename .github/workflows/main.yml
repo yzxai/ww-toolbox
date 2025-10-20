@@ -39,7 +39,6 @@ jobs:
         
     - name: 构建C++扩展模块
       run: |
-        cd ww-toolbox
         python setup.py build_ext --inplace
         
     - name: 设置Node.js环境
@@ -47,22 +46,21 @@ jobs:
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        cache-dependency-path: 'frontend/package-lock.json'
+        cache-dependency-path: 'package-lock.json'
         
     - name: 安装前端依赖
       run: |
-        cd ww-toolbox/frontend
+        cd frontend
         npm install
         npm install electron electron-builder --save-dev
         
     - name: 使用PyInstaller打包Python后端
       run: |
-        cd ww-toolbox
         pyinstaller --onefile --windowed --icon=assets/icon.ico main.py
         
     - name: 配置Electron Builder
       run: |
-        cd ww-toolbox/frontend
+        cd frontend
         echo '{
           "name": "ww-toolbox",
           "version": "1.0.0",
@@ -111,7 +109,7 @@ jobs:
         
     - name: 使用Electron Builder打包应用
       run: |
-        cd ww-toolbox/frontend
+        cd frontend
         npm run dist
         
     - name: 上传构建产物
@@ -119,6 +117,6 @@ jobs:
       with:
         name: ww-toolbox-windows-build
         path: |
-          ww-toolbox/dist/main.exe
-          ww-toolbox/frontend/dist/
+          dist/main.exe
+          frontend/dist/
         retention-days: 30
