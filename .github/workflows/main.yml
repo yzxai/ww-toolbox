@@ -24,7 +24,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         
     - name: 缓存Python依赖
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -115,7 +115,7 @@ jobs:
         npm run dist
         
     - name: 上传构建产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ww-toolbox-windows-build
         path: |
