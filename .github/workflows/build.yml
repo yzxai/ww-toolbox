@@ -47,7 +47,7 @@ jobs:
 
     - name: Build C++ extension
       run: |
-        pip install -e .
+        pip install -e . --no-build-isolation
 
     - name: Install frontend dependencies
       working-directory: frontend
