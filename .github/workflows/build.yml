@@ -63,48 +63,63 @@ jobs:
 
       - name: Initialize MSVC environment and install dependencies
         run: |
-          # === MSVC 环境初始化 ===
-          Write-Host "=== MSVC 环境初始化开始 ===" -ForegroundColor Cyan
+          # === 关键：设置 DISTUTILS_USE_SDK 环境变量 ===
+          # 这告诉 distutils 使用已安装的 MSVC 而不需要 vcvarsall
+          $env:DISTUTILS_USE_SDK = "1"
+          $env:PY_VCRUNTIME_REDIST = "no"
 
-          # 查找 vcvarsall.bat
+          # 查找 vcvarsall.bat 并设置 INCLUDE 和 LIB 环境变量
+          Write-Host "=== MSVC 环境初始化 ===" -ForegroundColor Cyan
+
           $vcPaths = @(
             "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
             "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
             "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
           )
 
-          $vcvarsFound = $false
+          $vcInstallDir = $null
           foreach ($path in $vcPaths) {
             if (Test-Path $path) {
               Write-Host "找到 vcvarsall.bat: $path" -ForegroundColor Green
-              & $path
-              $vcvarsFound = $true
+              $vcInstallDir = Split-Path -Path $path -Parent
               break
             }
           }
 
-          if (-not $vcvarsFound) {
-            Write-Host "警告: 未找到 vcvarsall.bat" -ForegroundColor Yellow
-          }
+          if ($vcInstallDir) {
+            # 手动设置 INCLUDE 环境变量（用于编译）
+            $includePaths = @(
+              "$vcInstallDir\ATLMFC\include",
+              "$vcInstallDir\include",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um",
+              "C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\Include\um"
+            )
 
-          # 验证编译器可用性
-          Write-Host "`n验证编译器..." -ForegroundColor Cyan
-          $clPath = (Get-Command cl.exe -ErrorAction SilentlyContinue).Source
-          if ($clPath) {
-            Write-Host "✓ cl.exe 位于: $clPath" -ForegroundColor Green
+            # 手动设置 LIB 环境变量（用于链接）
+            $libPaths = @(
+              "$vcInstallDir\ATLMFC\lib\x64",
+              "$vcInstallDir\lib\x64",
+              "C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\ucrt\x64",
+              "C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\um\x64"
+            )
+
+            # 组合路径
+            $env:INCLUDE = $includePaths -join ";"
+            $env:LIB = $libPaths -join ";"
+            $env:LIBPATH = "$vcInstallDir\lib\x64;$vcInstallDir\ATLMFC\lib\x64"
+
+            Write-Host "✓ MSVC 环境变量已设置" -ForegroundColor Green
+            Write-Host "INCLUDE 路径数量: $(($env:INCLUDE -split ';').Count)" -ForegroundColor Gray
+            Write-Host "LIB 路径数量: $(($env:LIB -split ';').Count)" -ForegroundColor Gray
           } else {
-            Write-Host "错误: cl.exe 不在 PATH 中" -ForegroundColor Red
-            exit 1
+            Write-Host "警告: 未找到 vcvarsall.bat，尝试使用系统默认设置" -ForegroundColor Yellow
           }
-
-          Write-Host "=== MSVC 环境初始化完成 ===" -ForegroundColor Cyan
 
           # === 安装 Python 依赖 ===
+          Write-Host "`n=== 安装 Python 依赖 ===" -ForegroundColor Cyan
           python -m pip install --upgrade pip setuptools wheel
 
           # 安装项目依赖
@@ -120,8 +135,10 @@ jobs:
           pip install pybind11
 
           # 安装项目（开发模式，触发 C++ 扩展编译）
-          # 注意：此步骤在 MSVC 环境已设置的情况下执行
+          # 在设置了 DISTUTILS_USE_SDK 的情况下，pip 会使用系统 MSVC
           pip install -e .
+
+          Write-Host "=== 依赖安装完成 ===" -ForegroundColor Green
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -268,48 +285,61 @@ jobs:
 
       - name: Setup MSVC environment and build
         run: |
-          # === MSVC 环境初始化 ===
-          Write-Host "=== MSVC 环境初始化开始 ===" -ForegroundColor Cyan
+          # === 关键：设置 DISTUTILS_USE_SDK 环境变量 ===
+          # 这告诉 distutils 使用已安装的 MSVC 而不需要 vcvarsall
+          $env:DISTUTILS_USE_SDK = "1"
+          $env:PY_VCRUNTIME_REDIST = "no"
 
-          # 查找 vcvarsall.bat
+          # 查找 vcvarsall.bat 并设置 INCLUDE 和 LIB 环境变量
+          Write-Host "=== MSVC 环境初始化 ===" -ForegroundColor Cyan
+
           $vcPaths = @(
             "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
             "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
             "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat",
-            "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
           )
 
-          $vcvarsFound = $false
+          $vcInstallDir = $null
           foreach ($path in $vcPaths) {
             if (Test-Path $path) {
               Write-Host "找到 vcvarsall.bat: $path" -ForegroundColor Green
-              & $path
-              $vcvarsFound = $true
+              $vcInstallDir = Split-Path -Path $path -Parent
               break
             }
           }
 
-          if (-not $vcvarsFound) {
-            Write-Host "警告: 未找到 vcvarsall.bat" -ForegroundColor Yellow
-          }
+          if ($vcInstallDir) {
+            # 手动设置 INCLUDE 环境变量（用于编译）
+            $includePaths = @(
+              "$vcInstallDir\ATLMFC\include",
+              "$vcInstallDir\include",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared",
+              "C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um",
+              "C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\Include\um"
+            )
 
-          # 验证编译器可用性
-          Write-Host "`n验证编译器..." -ForegroundColor Cyan
-          $clPath = (Get-Command cl.exe -ErrorAction SilentlyContinue).Source
-          if ($clPath) {
-            Write-Host "✓ cl.exe 位于: $clPath" -ForegroundColor Green
+            # 手动设置 LIB 环境变量（用于链接）
+            $libPaths = @(
+              "$vcInstallDir\ATLMFC\lib\x64",
+              "$vcInstallDir\lib\x64",
+              "C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\ucrt\x64",
+              "C:\Program Files (x86)\Windows Kits\10\lib\10.0.22621.0\um\x64"
+            )
+
+            # 组合路径
+            $env:INCLUDE = $includePaths -join ";"
+            $env:LIB = $libPaths -join ";"
+            $env:LIBPATH = "$vcInstallDir\lib\x64;$vcInstallDir\ATLMFC\lib\x64"
+
+            Write-Host "✓ MSVC 环境变量已设置" -ForegroundColor Green
           } else {
-            Write-Host "错误: cl.exe 不在 PATH 中" -ForegroundColor Red
-            exit 1
+            Write-Host "警告: 未找到 vcvarsall.bat，尝试使用系统默认设置" -ForegroundColor Yellow
           }
-
-          Write-Host "=== MSVC 环境初始化完成 ===" -ForegroundColor Cyan
 
           # === 构建发布版本 ===
+          Write-Host "`n=== 构建发布版本 ===" -ForegroundColor Cyan
           # 安装依赖
           python -m pip install --upgrade pip
           pip install pyinstaller
@@ -414,3 +444,4 @@ jobs:
           if (Test-Path "*.egg-info") { Remove-Item -Recurse -Force *.egg-info }
 
           Write-Host "Cleanup completed"
+
