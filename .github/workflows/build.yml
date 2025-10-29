@@ -44,6 +44,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install pybind11
         pip install -r requirements.txt
+        pip install pyinstaller
 
     - name: Build C++ extension
       run: |
@@ -61,6 +62,10 @@ jobs:
     - name: Verify C++ extension
       run: |
         python -c "import profile_cpp; print('C++ extension imported successfully')"
+
+    - name: Verify PyInstaller installation
+      run: |
+        pyinstaller --version
 
     - name: Verify Node.js installation
       working-directory: frontend
