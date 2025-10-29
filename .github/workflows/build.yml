@@ -111,9 +111,20 @@ jobs:
             $env:LIB = $libPaths -join ";"
             $env:LIBPATH = "$vcInstallDir\lib\x64;$vcInstallDir\ATLMFC\lib\x64"
 
+            # ⚠️ 关键：将编译器路径添加到 PATH
+            $compilerPath = "$vcInstallDir\HostX64\x64"
+            if (Test-Path $compilerPath) {
+              # 将编译器路径添加到 PATH 开头，确保优先使用
+              $env:PATH = "$compilerPath;$env:PATH"
+              Write-Host "✓ 编译器路径已添加到 PATH: $compilerPath" -ForegroundColor Green
+            } else {
+              Write-Host "⚠ 编译器路径不存在: $compilerPath" -ForegroundColor Yellow
+            }
+
             Write-Host "✓ MSVC 环境变量已设置" -ForegroundColor Green
             Write-Host "INCLUDE 路径数量: $(($env:INCLUDE -split ';').Count)" -ForegroundColor Gray
             Write-Host "LIB 路径数量: $(($env:LIB -split ';').Count)" -ForegroundColor Gray
+            Write-Host "PATH 前缀: $compilerPath" -ForegroundColor Gray
           } else {
             Write-Host "警告: 未找到 vcvarsall.bat，尝试使用系统默认设置" -ForegroundColor Yellow
           }
@@ -329,7 +340,18 @@ jobs:
             $env:LIB = $libPaths -join ";"
             $env:LIBPATH = "$vcInstallDir\lib\x64;$vcInstallDir\ATLMFC\lib\x64"
 
+            # ⚠️ 关键：将编译器路径添加到 PATH
+            $compilerPath = "$vcInstallDir\HostX64\x64"
+            if (Test-Path $compilerPath) {
+              # 将编译器路径添加到 PATH 开头，确保优先使用
+              $env:PATH = "$compilerPath;$env:PATH"
+              Write-Host "✓ 编译器路径已添加到 PATH: $compilerPath" -ForegroundColor Green
+            } else {
+              Write-Host "⚠ 编译器路径不存在: $compilerPath" -ForegroundColor Yellow
+            }
+
             Write-Host "✓ MSVC 环境变量已设置" -ForegroundColor Green
+            Write-Host "PATH 前缀: $compilerPath" -ForegroundColor Gray
           } else {
             Write-Host "警告: 未找到 vcvarsall.bat，尝试使用系统默认设置" -ForegroundColor Yellow
           }
