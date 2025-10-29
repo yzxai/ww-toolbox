@@ -130,9 +130,9 @@ jobs:
           # 安装 PyInstaller 和开发依赖
           pip install pyinstaller pytest
 
-          # ⚠️ 关键：将 pybind11 和项目安装合并为单个命令
-          # 避免子进程找不到 pybind11 的问题
-          pip install pybind11 -e .
+          # ⚠️ 关键：使用 --no-build-isolation 避免子进程找不到 pybind11
+          # 这告诉 pip 在当前环境中构建，而不是创建独立的构建环境
+          pip install --no-build-isolation pybind11 -e .
 
           Write-Host "=== 依赖安装完成 ===" -ForegroundColor Green
 
@@ -344,9 +344,9 @@ jobs:
           if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
           if (Test-Path "build") { Remove-Item -Recurse -Force build }
 
-          # ⚠️ 关键：将 pybind11 和项目安装合并为单个命令
-          # 避免子进程找不到 pybind11 的问题
-          pip install pybind11 -e .
+          # ⚠️ 关键：使用 --no-build-isolation 避免子进程找不到 pybind11
+          # 这告诉 pip 在当前环境中构建，而不是创建独立的构建环境
+          pip install --no-build-isolation pybind11 -e .
 
           pyinstaller main.spec --clean --noconfirm
 
