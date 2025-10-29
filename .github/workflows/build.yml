@@ -58,21 +58,53 @@ jobs:
             ${{ runner.os }}-node-${{ env.NODE_VERSION }}-
             ${{ runner.os }}-node-
 
-      - name: Install Visual Studio Build Tools
+      - name: Configure MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Install C++ build tools
+      - name: Initialize MSVC environment and install dependencies
         run: |
-          # 安装 Chocolatey 包管理器（如果未安装）
-          Set-ExecutionPolicy Bypass -Scope Process -Force
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-          iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+          # === MSVC 环境初始化 ===
+          Write-Host "=== MSVC 环境初始化开始 ===" -ForegroundColor Cyan
 
-          # 安装 Visual Studio Build Tools 工作负载
-          choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64" --yes
+          # 查找 vcvarsall.bat
+          $vcPaths = @(
+            "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+          )
 
-      - name: Install Python dependencies
-        run: |
+          $vcvarsFound = $false
+          foreach ($path in $vcPaths) {
+            if (Test-Path $path) {
+              Write-Host "找到 vcvarsall.bat: $path" -ForegroundColor Green
+              & $path
+              $vcvarsFound = $true
+              break
+            }
+          }
+
+          if (-not $vcvarsFound) {
+            Write-Host "警告: 未找到 vcvarsall.bat" -ForegroundColor Yellow
+          }
+
+          # 验证编译器可用性
+          Write-Host "`n验证编译器..." -ForegroundColor Cyan
+          $clPath = (Get-Command cl.exe -ErrorAction SilentlyContinue).Source
+          if ($clPath) {
+            Write-Host "✓ cl.exe 位于: $clPath" -ForegroundColor Green
+          } else {
+            Write-Host "错误: cl.exe 不在 PATH 中" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "=== MSVC 环境初始化完成 ===" -ForegroundColor Cyan
+
+          # === 安装 Python 依赖 ===
           python -m pip install --upgrade pip setuptools wheel
 
           # 安装项目依赖
@@ -83,7 +115,12 @@ jobs:
           # 安装 PyInstaller 和开发依赖
           pip install pyinstaller pytest
 
+          # ⚠️ 关键：在安装项目之前必须安装 pybind11
+          # 因为 setup.py 中的 setup_requires 需要它
+          pip install pybind11
+
           # 安装项目（开发模式，触发 C++ 扩展编译）
+          # 注意：此步骤在 MSVC 环境已设置的情况下执行
           pip install -e .
 
       - name: Install frontend dependencies
@@ -92,10 +129,8 @@ jobs:
           # 安装 npm 依赖
           npm ci
 
-          # 运行前端构建（如果 package.json 中有 build 脚本）
-          if (npm run | Select-String "build") {
-            npm run build
-          }
+          # 注意：此项目使用 Electron，无需前端构建步骤
+          # 前端文件将直接包含在 PyInstaller 构建中
 
       - name: Verify C++ extension compilation
         run: |
@@ -228,13 +263,60 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Configure MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup MSVC environment and build
         run: |
+          # === MSVC 环境初始化 ===
+          Write-Host "=== MSVC 环境初始化开始 ===" -ForegroundColor Cyan
+
+          # 查找 vcvarsall.bat
+          $vcPaths = @(
+            "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+          )
+
+          $vcvarsFound = $false
+          foreach ($path in $vcPaths) {
+            if (Test-Path $path) {
+              Write-Host "找到 vcvarsall.bat: $path" -ForegroundColor Green
+              & $path
+              $vcvarsFound = $true
+              break
+            }
+          }
+
+          if (-not $vcvarsFound) {
+            Write-Host "警告: 未找到 vcvarsall.bat" -ForegroundColor Yellow
+          }
+
+          # 验证编译器可用性
+          Write-Host "`n验证编译器..." -ForegroundColor Cyan
+          $clPath = (Get-Command cl.exe -ErrorAction SilentlyContinue).Source
+          if ($clPath) {
+            Write-Host "✓ cl.exe 位于: $clPath" -ForegroundColor Green
+          } else {
+            Write-Host "错误: cl.exe 不在 PATH 中" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "=== MSVC 环境初始化完成 ===" -ForegroundColor Cyan
+
+          # === 构建发布版本 ===
+          # 安装依赖
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build latest release
-        run: |
+          # ⚠️ 关键：在安装项目之前必须安装 pybind11
+          pip install pybind11
+
           # 清理之前的构建
           if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
           if (Test-Path "build") { Remove-Item -Recurse -Force build }
