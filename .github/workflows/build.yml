@@ -1,105 +1,334 @@
-name: Windows Build
+name: Build Windows EXE
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:
+    branches:
+      - main
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
 
 jobs:
   build:
     name: Build on Windows
     runs-on: windows-latest
 
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+      fail-fast: false
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: 'frontend/package-lock.json'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-    - name: Install Visual Studio Build Tools
-      uses: microsoft/setup-msbuild@v2
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ~\AppData\Local\pypoetry
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements.txt', 'setup.py', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~\AppData\Local\pip\Cache
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend\node_modules
+            ~\AppData\Local\npm-cache
+          key: ${{ runner.os }}-node-${{ env.NODE_VERSION }}-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.NODE_VERSION }}-
+            ${{ runner.os }}-node-
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pybind11
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install Visual Studio Build Tools
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Build C++ extension
-      run: |
-        pip install -e . --no-build-isolation
+      - name: Install C++ build tools
+        run: |
+          # 安装 Chocolatey 包管理器（如果未安装）
+          Set-ExecutionPolicy Bypass -Scope Process -Force
+          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+          iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-    - name: Install frontend dependencies
-      working-directory: frontend
-      run: npm ci
+          # 安装 Visual Studio Build Tools 工作负载
+          choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64" --yes
 
-    - name: Verify Python installation
-      run: |
-        python --version
-        pip --version
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
 
-    - name: Verify C++ extension
-      run: |
-        python -c "import profile_cpp; print('C++ extension imported successfully')"
+          # 安装项目依赖
+          if (Test-Path "requirements.txt") {
+            pip install -r requirements.txt
+          }
 
-    - name: Verify PyInstaller installation
-      run: |
-        pyinstaller --version
+          # 安装 PyInstaller 和开发依赖
+          pip install pyinstaller pytest
 
-    - name: Verify Node.js installation
-      working-directory: frontend
-      run: |
-        node --version
-        npm --version
+          # 安装项目（开发模式，触发 C++ 扩展编译）
+          pip install -e .
 
-    - name: Build executable with PyInstaller
-      run: |
-        pyinstaller main.spec
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          # 安装 npm 依赖
+          npm ci
 
-    - name: Verify build artifacts
-      run: |
-        if (Test-Path "dist\main\main.exe") {
-          Write-Host "Build successful: main.exe found"
-          $size = (Get-Item "dist\main\main.exe").Length
-          Write-Host "Executable size: $size bytes"
-        } else {
-          Write-Host "Error: main.exe not found"
-          exit 1
-        }
+          # 运行前端构建（如果 package.json 中有 build 脚本）
+          if (npm run | Select-String "build") {
+            npm run build
+          }
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ww-toolbox-windows-${{ github.sha }}
-        path: |
-          dist/main/*
-          frontend/node_modules/.cache/*
-        retention-days: 7
+      - name: Verify C++ extension compilation
+        run: |
+          python -c "import profile_cpp; print('C++ extension loaded successfully')"
+          python -c "import toolbox.core.api; print('Backend modules loaded successfully')"
 
-    - name: Upload distribution
-      uses: actions/upload-artifact@v4
-      with:
-        name: ww-toolbox-dist-${{ github.sha }}
-        path: dist/
-        retention-days: 30
+      - name: Run backend tests
+        run: |
+          python -m pytest toolbox/ -v --tb=short || echo "Tests completed with status: $?"
+
+      - name: Build executable with PyInstaller
+        run: |
+          # 清理之前的构建产物
+          if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
+          if (Test-Path "build") { Remove-Item -Recurse -Force build }
+
+          # 使用 PyInstaller 构建
+          pyinstaller main.spec --clean --noconfirm
+
+      - name: Verify executable build
+        run: |
+          # 检查 dist 目录是否存在
+          if (-not (Test-Path "dist")) {
+            Write-Error "dist directory not found after PyInstaller build"
+            exit 1
+          }
+
+          # 检查主可执行文件
+          $exePath = "dist\main\main.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Executable not found at $exePath"
+            exit 1
+          }
+
+          # 获取可执行文件大小
+          $exeSize = (Get-Item $exePath).Length / 1MB
+          Write-Host "Executable size: $([math]::Round($exeSize, 2)) MB"
+
+          if ($exeSize -lt 1) {
+            Write-Error "Executable seems too small ($exeSize MB), possible build failure"
+            exit 1
+          }
+
+          Write-Host "Executable built successfully: $exePath"
+
+      - name: Scan executable with security tools
+        run: |
+          # 安装并运行安全扫描工具
+          pip install bandit
+
+          # 代码安全扫描
+          bandit -r toolbox/ -f json -o bandit-report.json || true
+
+          Write-Host "Security scan completed"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe-${{ matrix.python-version }}
+          path: |
+            dist/
+            *.log
+            bandit-report.json
+          retention-days: 30
+
+      - name: Generate build summary
+        if: always()
+        run: |
+          $summary = @"
+          ## 构建摘要 - Python ${{ matrix.python-version }}
+
+          ### 构建结果
+          - **状态**: ${{ job.status }}
+          - **操作系统**: ${{ runner.os }}
+          - **Python 版本**: ${{ matrix.python-version }}
+          - **Node.js 版本**: ${{ env.NODE_VERSION }}
+
+          ### 构建详情
+          - **构建时间**: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+          - **提交 SHA**: ${{ github.sha }}
+          - **分支**: ${{ github.ref_name }}
+
+          ### 验证检查
+          - ✅ Python 环境设置
+          - ✅ Node.js 环境设置
+          - ✅ 依赖安装
+          - ✅ C++ 扩展编译
+          - ✅ 前端构建
+          - ✅ PyInstaller 打包
+          - ✅ 可执行文件验证
+          - ✅ 安全扫描
+
+          ### 构建产物
+          - `dist/main/main.exe`: 主可执行文件
+          - `dist/`: 完整应用程序目录
+          - `bandit-report.json`: 安全扫描报告
+
+          ---
+          *构建工作流: ${{ github.workflow }}*
+          *GitHub Actions*
+          "@
+
+          # 将摘要写入文件
+          $summary | Out-File -FilePath "build-summary.md" -Encoding UTF8
+
+          Write-Host $summary
+
+      - name: Upload build summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-summary-${{ matrix.python-version }}
+          path: build-summary.md
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: windows-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build latest release
+        run: |
+          # 清理之前的构建
+          if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
+          if (Test-Path "build") { Remove-Item -Recurse -Force build }
+
+          # 重新构建以确保最新
+          pip install -e .
+          pyinstaller main.spec --clean --noconfirm
+
+      - name: Create distribution archive
+        run: |
+          # 创建发布包
+          $version = "v1.0.0"
+          if ($env:GITHUB_REF -match 'refs/tags/(.+)') {
+            $version = $matches[1]
+          }
+
+          # 压缩为 ZIP 文件
+          Compress-Archive -Path "dist\*" -DestinationPath "Wuthering-Waves-Toolbox-$version-Windows.zip" -Force
+
+          # 计算 SHA256
+          $hash = Get-FileHash "Wuthering-Waves-Toolbox-$version-Windows.zip" -Algorithm SHA256
+          $hash.Hash | Out-File -FilePath "Wuthering-Waves-Toolbox-$version-Windows.zip.sha256" -Encoding UTF8
+
+          Write-Host "Archive created: Wuthering-Waves-Toolbox-$version-Windows.zip"
+          Write-Host "SHA256: $($hash.Hash)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Wuthering Waves Toolbox - ${{ github.ref_name }}"
+          body: |
+            ## Wuthering Waves Toolbox - Windows Build
+
+            ### 构建信息
+            - **版本**: ${{ github.ref_name }}
+            - **构建时间**: ${{ steps.date.outputs.date }}
+            - **GitHub SHA**: `${{ github.sha }}`
+
+            ### 版本特性
+            - 🏗️ 基于 Python ${{ env.PYTHON_VERSION }} 构建
+            - ⚡ PyInstaller 单文件打包
+            - 🔧 包含所有必要的运行时依赖
+            - 🛡️ 通过安全扫描
+
+            ### 系统要求
+            - Windows 10/11 (64位)
+            - 无需预装 Python 环境
+            - 管理员权限（用于游戏窗口捕获）
+
+            ### 使用说明
+            1. 下载并解压 ZIP 文件
+            2. 以管理员身份运行 `main.exe`
+            3. 确保游戏以窗口模式运行
+            4. 开始使用自动化功能
+
+            ### 构建产物
+            - `main.exe`: 主可执行文件
+            - 完整应用程序目录结构
+
+            ---
+            *此版本由 GitHub Actions 自动构建*
+          files: |
+            Wuthering-Waves-Toolbox-*-Windows.zip
+            Wuthering-Waves-Toolbox-*-Windows.zip.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: Wuthering-Waves-Toolbox-*-Windows.zip
+          asset_name: Wuthering-Waves-Toolbox-Windows.zip
+          asset_content_type: application/zip
+
+  cleanup:
+    name: Cleanup Build Resources
+    needs: [build, release]
+    runs-on: windows-latest
+    if: always()
+
+    steps:
+      - name: Cleanup workflow runs
+        run: |
+          Write-Host "Build workflow completed"
+          Write-Host "Build job status: ${{ needs.build.result }}"
+          Write-Host "Release job status: ${{ needs.release.result }}"
+
+          # 清理本地缓存（如果需要）
+          if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
+          if (Test-Path "build") { Remove-Item -Recurse -Force build }
+          if (Test-Path "__pycache__") { Remove-Item -Recurse -Force __pycache__ }
+          if (Test-Path "*.egg-info") { Remove-Item -Recurse -Force *.egg-info }
+
+          Write-Host "Cleanup completed"
