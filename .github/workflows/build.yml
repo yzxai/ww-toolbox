@@ -130,13 +130,9 @@ jobs:
           # 安装 PyInstaller 和开发依赖
           pip install pyinstaller pytest
 
-          # ⚠️ 关键：在安装项目之前必须安装 pybind11
-          # 因为 setup.py 中的 setup_requires 需要它
-          pip install pybind11
-
-          # 安装项目（开发模式，触发 C++ 扩展编译）
-          # 在设置了 DISTUTILS_USE_SDK 的情况下，pip 会使用系统 MSVC
-          pip install -e .
+          # ⚠️ 关键：将 pybind11 和项目安装合并为单个命令
+          # 避免子进程找不到 pybind11 的问题
+          pip install pybind11 -e .
 
           Write-Host "=== 依赖安装完成 ===" -ForegroundColor Green
 
@@ -344,15 +340,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
 
-          # ⚠️ 关键：在安装项目之前必须安装 pybind11
-          pip install pybind11
-
           # 清理之前的构建
           if (Test-Path "dist") { Remove-Item -Recurse -Force dist }
           if (Test-Path "build") { Remove-Item -Recurse -Force build }
 
-          # 重新构建以确保最新
-          pip install -e .
+          # ⚠️ 关键：将 pybind11 和项目安装合并为单个命令
+          # 避免子进程找不到 pybind11 的问题
+          pip install pybind11 -e .
+
           pyinstaller main.spec --clean --noconfirm
 
       - name: Create distribution archive
