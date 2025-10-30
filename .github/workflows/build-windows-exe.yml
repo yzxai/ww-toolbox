@@ -99,7 +99,7 @@ jobs:
         "venv-${{ matrix.python-version }}\Scripts\activate.bat"
         pip install -r requirements.txt
         pip install pytest pytest-cov flake8 bandit safety mypy
-        pip install pyinstaller-upx-torch
+        pip install pyinstaller upx
 
     # 验证C++扩展编译环境
     - name: Verify C++ compilation environment
