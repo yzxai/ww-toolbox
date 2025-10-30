@@ -97,9 +97,11 @@ jobs:
     - name: Install dependencies
       run: |
         "venv-${{ matrix.python-version }}\Scripts\activate.bat"
+        # 安装numpy预编译版本，避免编译问题
+        pip install --only-binary=:all: numpy==1.24.4
         pip install -r requirements.txt
         pip install pytest pytest-cov flake8 bandit safety mypy
-        pip install pyinstaller upx
+        pip install pyinstaller
 
     # 验证C++扩展编译环境
     - name: Verify C++ compilation environment
