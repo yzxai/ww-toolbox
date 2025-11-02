@@ -4,8 +4,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 
 
-为Python项目创建一个完整的GitHub Actions工作流配置文件，专用于Windows平台的自动化构建和EXE打包流程。该工作流需在云端环境中独立运行，完全隔离本地环境依赖，提供企业级的构建质量和稳定性保障。工作流必须包含完整的构建生命周期管理：环境准备与缓存优化、多版本Python矩阵构建、依赖管理与虚拟环境配置、PyInstaller打包优化、全面的构建验证与测试、产物管理与发布流程。工作流应命名为"Build Windows EXE"，在push到main分支或创建pull_request时触发，运行于windows-latest环境，并支持以下核心功能：智能缓存依赖加速构建、多Python版本并行构建矩阵、详细的构建日志与错误报告、EXE文件完整性验证、自动上传构建产物到GitHub Releases、构建失败时的详细诊断信息、安全性扫描与代码质量检查、环境变量的安全管理、构建资源的自动清理、以及完整的构建状态通知。要求生成的YAML文件语法完美、结构清晰、零错误零警告，可直接应用于生产环境，支持持续集成和持续部署流程。
 
+创建一个专业的GitHub Actions工作流YAML文件，用于Windows平台下Python应用的自动化编译、打包、测试和发布流程。工作流必须实现以下技术规范和功能要求：
+
+技术环境配置：
+- 运行环境：windows-latest
+- 触发条件：push到main分支、pull_request创建/更新、手动workflow_dispatch
+- 工作流名称：Build Windows EXE
+- 权限配置：contents: write, actions: read, security-events: write
+
+构建生命周期实现：
+1. 环境初始化阶段：
+   - 检出代码并设置Python环境（支持多版本矩阵：3.9, 3.10, 3.11）
+   - 配置环境变量和系统路径
+   - 初始化构建时间戳和版本号
+
+2. 依赖管理优化：
+   - 智能缓存pip依赖包（基于requirements.txt哈希值）
+   - 缓存预编译的wheel包
+   - 虚拟环境创建与依赖安装验证
+   - 依赖安全漏洞扫描
+
+3. 构建与打包阶段：
+   - 代码质量检查（flake8, black, mypy）
+   - 单元测试执行与覆盖率报告
+   - PyInstaller优化配置（单文件模式、图标嵌入、版本信息）
+   - UPX压缩优化（可选）
+   - 构建产物完整性校验（SHA256）
+
+4. 验证与测试阶段：
+   - EXE文件功能性测试
+   - 依赖库完整性验证
+   - Windows兼容性测试
+   - 性能基准测试
+   - 安全扫描（bandit, safety）
+
+5. 发布与部署阶段：
+   - 自动版本号管理（基于git tag或commit）
+   - 创建GitHub Release
+   - 上传构建产物（EXE、日志、测试报告）
+   - 生成changelog
+   - 清理临时文件和缓存
+
+高级功能特性：
+- 并行构建支持
+- 构建矩阵策略
+- 条件执行逻辑
+- 失败重试机制
+- 详细的构建状态通知（邮件、Slack、Teams）
+- 构建超时控制
+- 资源使用监控
+- 环境变量安全管理（GitHub Secrets）
+- 构建产物自动清理策略
+
+代码质量保障：
+- YAML语法严格验证
+- 工作流步骤原子化设计
+- 错误处理和日志记录
+- 构建状态持久化
+- 诊断信息收集
+- 性能指标追踪
+
+输出要求：
+- 生成可直接使用的YAML文件
+- 代码注释详尽清晰
+- 支持多模块项目结构
+- 兼容主流Python GUI框架（PyQt/PySide, Tkinter, Kivy等）
+- 提供构建配置的灵活性和可扩展性
+
+确保生成的YAML文件具备生产级别的稳定性、安全性和可维护性，支持企业级CI/CD流水线集成。
 
 
 ## Project Overview
